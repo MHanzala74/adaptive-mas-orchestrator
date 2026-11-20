@@ -8,7 +8,7 @@ from mas.attribution import RuleAttributor
 from mas.benchmarks.tasks import check
 from mas.core import Context, RunResult
 from mas.faults import FaultSpec, build_faults
-from mas.llm import BaseLLM, BudgetExceeded, MockLLM, TokenMeter, parse_answer
+from mas.llm import BaseLLM, BudgetExceeded, TokenMeter, get_llm, parse_answer
 from mas.repair import RepairPolicy, detect_failure
 from mas.router.features import featurize
 
@@ -42,7 +42,7 @@ class Orchestrator:
 
     def run(self, task, *, budget: int | None = None, faults: list[FaultSpec] | None = None,
             seed: int = 0, llm: BaseLLM | None = None) -> RunResult:
-        llm = llm or MockLLM(seed=seed)
+        llm = llm or get_llm(seed)
         meter = TokenMeter(budget)             # one shared budget across all attempts
         fault_fns = build_faults(faults or [], salt=str(seed))
         arch_name = (self.router.select(featurize(task.question), budget, explore=False)

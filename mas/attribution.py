@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from mas.core import RunResult, Step
-from mas.llm import BaseLLM, TokenMeter, MockLLM
+from mas.llm import BaseLLM, TokenMeter, get_llm
 
 NON_ANSWERING = {"planner"}   # agents whose output is not a final numeric answer
 
@@ -109,7 +109,7 @@ class LLMAttributor:
     name = "llm"
 
     def __init__(self, llm: BaseLLM | None = None):
-        self.llm = llm or MockLLM()
+        self.llm = llm or get_llm()
 
     def attribute(self, res: RunResult) -> Attribution:
         meter = TokenMeter()

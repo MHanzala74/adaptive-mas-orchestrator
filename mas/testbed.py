@@ -6,13 +6,13 @@ from dataclasses import dataclass
 from mas.architectures.impl import make
 from mas.core import Context, RunResult
 from mas.faults import FaultSpec, build_faults
-from mas.llm import MockLLM, TokenMeter, BaseLLM
+from mas.llm import get_llm, TokenMeter, BaseLLM
 
 
 def run_once(task, arch: str, *, llm: BaseLLM | None = None, seed: int = 0,
              budget: int | None = None, faults: list[FaultSpec] | None = None,
              overrides: dict | None = None) -> RunResult:
-    ctx = Context(llm or MockLLM(seed=seed), TokenMeter(budget),
+    ctx = Context(llm or get_llm(seed), TokenMeter(budget),
                   faults=build_faults(faults or [], salt=str(seed)), overrides=overrides or {})
     return make(arch).run(task, ctx)
 

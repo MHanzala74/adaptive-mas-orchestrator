@@ -22,7 +22,7 @@ identify the responsible agent/step and repair its own topology?
 - [x] FastAPI service (`api/main.py`: `/solve`, `/router/train`, `/faults/sweep`, `/architectures`, `/health`)
 - [x] Statistics (`mas/stats.py`: bootstrap CIs, paired differences) and main comparison (`experiments/main_results.py`)
 - [x] Ablations (`experiments/ablation.py` -> `results/ablation.md`: never / blind retry / attribution / attribution+switch / oracle trigger)
-- [ ] Technical report
+- [x] Technical report draft (`docs/report.md`)
 
 ## Early observations (mock backend, 100 tasks, rule attributor)
 | Architecture | Fault | Agent-level attribution |
@@ -104,3 +104,10 @@ An intermittent-fault RNG bug (all-or-nothing per seed) was found and fixed duri
 1. ~~Add a verifier signal~~ done (see above); next: replace the same-model verifier with a cheaper/different one and measure false-alarm cost.
 2. Make the debate trigger **consensus-margin aware** instead of "any disagreement".
 3. ~~Scenario where the switch is necessary~~ done (persistent wrong-answer fault); next: shared-role failures that follow the agent across topologies.
+
+## Running with a real LLM
+```bash
+export LLM_BACKEND=anthropic ANTHROPIC_API_KEY=...   # MODEL_NAME defaults to a small model
+python experiments/main_results.py --n-train 100 --n-test 100   # costs real API tokens; start small
+```
+The synthetic arithmetic generator is the only built-in benchmark; use `mas.benchmarks.tasks.load_gsm8k_jsonl` for GSM8K-format files.
