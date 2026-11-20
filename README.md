@@ -18,7 +18,7 @@ identify the responsible agent/step and repair its own topology?
 - [x] Router (`mas/router/`: observable task features, budget-aware LinUCB, full-info + bandit training, counterfactual replay evaluation, oracle)
 - [x] Fault injection (`mas/faults.py`: wrong, malicious, loop, silent; `mas/testbed.py`: fault sweeps)
 - [x] Failure attribution (`mas/attribution.py`: zero-token `RuleAttributor`, `LLMAttributor`, agent/step-level scoring against injected-fault ground truth)
-- [ ] Repair policy + self-healing orchestrator
+- [x] Repair policy + self-healing orchestrator (`mas/repair.py`, `mas/orchestrator.py`: route -> run -> detect -> attribute -> reprompt/replace/bypass/switch topology, shared token budget)
 - [ ] FastAPI service
 - [ ] Experiment grid, ablations, stats
 - [ ] Technical report
@@ -35,3 +35,8 @@ Debate is the informative case: in round 2 the healthy debaters read the faulty
 peer's answer and often converge to it, so the *outlier signal disappears*.
 Scoring disagreement across *all* rounds beat both final-round-only and round-1-only voting; the remaining gap motivates the LLM attributor.
 Numbers come from the offline mock solver; re-run with `LLM_BACKEND=anthropic` for real results.
+
+## Design assumptions (read before interpreting results)
+- **Shared budget:** all attempts (initial run + repairs + LLM attribution) draw from one token budget per task.
+- **Failure trigger:** `detector` uses only inference-time signals (no answer, degenerate output, debate disagreement, budget overrun). `oracle` uses ground truth and is reported only as an upper bound. A single agent that is *confidently wrong* is undetectable by the detector - a known limitation.
+- **Topology switch = fresh agents:** faults are bound to agent names, so switching architecture escapes a broken agent. The `allow_switch=False` ablation isolates this effect.
