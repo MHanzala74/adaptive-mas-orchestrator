@@ -19,7 +19,7 @@ identify the responsible agent/step and repair its own topology?
 - [x] Fault injection (`mas/faults.py`: wrong, malicious, loop, silent; `mas/testbed.py`: fault sweeps)
 - [x] Failure attribution (`mas/attribution.py`: zero-token `RuleAttributor`, `LLMAttributor`, agent/step-level scoring against injected-fault ground truth)
 - [x] Repair policy + self-healing orchestrator (`mas/repair.py`, `mas/orchestrator.py`: route -> run -> detect -> attribute -> reprompt/replace/bypass/switch topology, shared token budget)
-- [ ] FastAPI service
+- [x] FastAPI service (`api/main.py`: `/solve`, `/router/train`, `/faults/sweep`, `/architectures`, `/health`)
 - [ ] Experiment grid, ablations, stats
 - [ ] Technical report
 
@@ -40,3 +40,17 @@ Numbers come from the offline mock solver; re-run with `LLM_BACKEND=anthropic` f
 - **Shared budget:** all attempts (initial run + repairs + LLM attribution) draw from one token budget per task.
 - **Failure trigger:** `detector` uses only inference-time signals (no answer, degenerate output, debate disagreement, budget overrun). `oracle` uses ground truth and is reported only as an upper bound. A single agent that is *confidently wrong* is undetectable by the detector - a known limitation.
 - **Topology switch = fresh agents:** faults are bound to agent names, so switching architecture escapes a broken agent. The `allow_switch=False` ablation isolates this effect.
+
+## Quick start
+```bash
+pip install -r requirements.txt
+cp .env.example .env            # LLM_BACKEND=mock (offline) or anthropic
+python -m pytest -q
+uvicorn api.main:app --reload   # docs at http://127.0.0.1:8000/docs
+```
+Example: a single agent whose output collapses into a loop is detected, blamed, replaced:
+```bash
+curl -X POST localhost:8000/solve -H 'content-type: application/json' -d '{
+  "question": "(3 + 4) * 5", "answer": "35", "architecture": "single", "use_router": false,
+  "faults": [{"agent": "solo", "kind": "loop"}]}'
+```
