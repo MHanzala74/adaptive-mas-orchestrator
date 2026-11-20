@@ -29,9 +29,9 @@ identify the responsible agent/step and repair its own topology?
 | single | any | 1.00 (trivial: one agent) |
 | planner_worker | any | 1.00 (trivial: fault sits on last answerer) |
 | debate | loop / silent | 1.00 |
-| debate | wrong / malicious | 0.54 |
+| debate | wrong / malicious | 0.68 (n=200; was 0.54 using final-round only, 0.41 using round-1 only) |
 
 Debate is the informative case: in round 2 the healthy debaters read the faulty
 peer's answer and often converge to it, so the *outlier signal disappears*.
-This motivates the LLM attributor and trace-level (round-1) analysis.
+Scoring disagreement across *all* rounds beat both final-round-only and round-1-only voting; the remaining gap motivates the LLM attributor.
 Numbers come from the offline mock solver; re-run with `LLM_BACKEND=anthropic` for real results.

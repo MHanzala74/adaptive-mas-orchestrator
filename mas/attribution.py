@@ -43,6 +43,14 @@ def _last_answers(trace: list[Step]) -> dict[str, Step]:
     return last
 
 
+def _first_answers(trace: list[Step]) -> dict[str, Step]:
+    first = {}
+    for s in trace:
+        if s.agent not in NON_ANSWERING and s.agent not in first:
+            first[s.agent] = s
+    return first
+
+
 def _anomalous_step(trace: list[Step], agent: str) -> int | None:
     steps = [s for s in trace if s.agent == agent]
     for s in steps:
@@ -60,14 +68,24 @@ class RuleAttributor:
         for agent, s in last.items():
             if is_degenerate(s.output) or s.answer is None:
                 return Attribution(agent, _anomalous_step(res.trace, agent), "degenerate output", "degenerate")
-        # 2) outlier versus the majority (needs >= 3 answering agents)
-        if len(last) >= 3:
-            vals = Counter(s.answer for s in last.values())
-            maj, cnt = vals.most_common(1)[0]
-            if cnt < len(last):
-                for agent, s in last.items():
-                    if s.answer != maj:
-                        return Attribution(agent, s.idx, "disagrees with majority", "outlier")
+        # 2) outlier versus the per-round majority (needs >= 3 answering agents):
+        #    blame the agent that disagrees with the majority in the most rounds.
+        by_agent: dict[str, list[Step]] = {}
+        for st in res.trace:
+            if st.agent not in NON_ANSWERING:
+                by_agent.setdefault(st.agent, []).append(st)
+        if len(by_agent) >= 3:
+            rounds = min(len(v) for v in by_agent.values())
+            dis = {a: 0 for a in by_agent}
+            for r in range(rounds):
+                vals = Counter(v[r].answer for v in by_agent.values())
+                maj, cnt = vals.most_common(1)[0]
+                if cnt >= 2:
+                    for a, v in by_agent.items():
+                        dis[a] += v[r].answer != maj
+            worst = max(dis, key=dis.get)
+            if dis[worst] > 0:
+                return Attribution(worst, _anomalous_step(res.trace, worst) , "most rounds in disagreement", "outlier")
         # 3) fall back: last answering agent (the one that produced the final answer)
         if last:
             agent = list(last)[-1]
