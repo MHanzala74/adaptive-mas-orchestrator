@@ -16,7 +16,7 @@ identify the responsible agent/step and repair its own topology?
 - [x] Benchmarks (`mas/benchmarks/tasks.py`: synthetic difficulty-graded arithmetic, GSM8K jsonl loader, train/test split)
 - [x] Architectures (`mas/core.py` runtime with trace + repair hooks; `mas/architectures/impl.py`: single, debate, planner-worker)
 - [ ] Router
-- [ ] Fault injection
+- [x] Fault injection (`mas/faults.py`: wrong, malicious, loop, silent; `mas/testbed.py`: fault sweeps)
 - [ ] Failure attribution + repair
 - [ ] FastAPI service
 - [ ] Experiment grid, ablations, stats
