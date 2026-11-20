@@ -163,9 +163,31 @@ class AnthropicLLM(BaseLLM):
         return LLMResponse(text, r.usage.input_tokens, r.usage.output_tokens)
 
 
+# ---------- OpenAI backend ----------
+class OpenAILLM(BaseLLM):
+    """Reads OPENAI_API_KEY from the environment (never hard-code keys)."""
+
+    def __init__(self, model: str | None = None, client=None):
+        if client is None:
+            from openai import OpenAI  # lazy import
+            client = OpenAI()
+        self.client = client
+        self.model = model or os.getenv("MODEL_NAME", "gpt-4o-mini")  # check current model names
+
+    def complete(self, system: str, prompt: str, temperature: float = 0.7) -> LLMResponse:
+        r = self.client.chat.completions.create(
+            model=self.model, temperature=temperature, max_completion_tokens=600,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+        )
+        return LLMResponse(r.choices[0].message.content or "", r.usage.prompt_tokens, r.usage.completion_tokens)
+
+
 def get_llm(seed: int = 0) -> BaseLLM:
-    if os.getenv("LLM_BACKEND", "mock") == "anthropic":
+    backend = os.getenv("LLM_BACKEND", "mock")
+    if backend == "anthropic":
         return AnthropicLLM()
+    if backend == "openai":
+        return OpenAILLM()
     return MockLLM(seed=seed)
 
 

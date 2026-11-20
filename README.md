@@ -116,7 +116,8 @@ An intermittent-fault RNG bug (all-or-nothing per seed) was found and fixed duri
 
 ## Running with a real LLM
 ```bash
-export LLM_BACKEND=anthropic ANTHROPIC_API_KEY=...   # MODEL_NAME defaults to a small model
+export LLM_BACKEND=anthropic ANTHROPIC_API_KEY=...   # or: LLM_BACKEND=openai OPENAI_API_KEY=... MODEL_NAME=gpt-4o-mini
+# keys go in environment variables only - never commit them
 python experiments/main_results.py --n-train 100 --n-test 100   # costs real API tokens; start small
 ```
 The synthetic arithmetic generator is the only built-in benchmark; use `mas.benchmarks.tasks.load_gsm8k_jsonl` for GSM8K-format files.
