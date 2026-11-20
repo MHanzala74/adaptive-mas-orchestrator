@@ -5,6 +5,9 @@
 Multi-agent LLM systems are usually fixed pipelines. Prior work reports that their gains often vanish under equal compute budgets and that failures are hard to localise. We ask: *can a system choose its topology per task within a token budget, and when it fails, identify the responsible agent and repair itself?*
 
 ## 2. System
+![Fig. 1](fig_architecture.png)
+*Fig. 1. System architecture (see `docs/make_figure.py`).*
+
 - **Architectures:** single agent, 3-agent two-round debate with majority vote, planner-worker.
 - **Router:** budget-aware LinUCB over observable task features, reward = correct - lambda * tokens / 300.
 - **Fault injection:** wrong, malicious (confident-wrong), loop, silent; persistent or intermittent.

@@ -1,9 +1,18 @@
 # Adaptive Multi-Agent Orchestrator with Failure Attribution
 
-## Research question
+## Problem statement
 Can a system decide, per task and within a token budget, whether to use a
 **single agent**, **debate**, or **planner-worker** — and, when it fails,
 identify the responsible agent/step and repair its own topology?
+
+## Architecture
+<p align="center"><img src="docs/fig_architecture.png" width="900" alt="System architecture"></p>
+
+**Fig. 1.** System architecture. A task $q$ with token budget $B$ is routed by a budget-aware LinUCB policy to one of three
+architectures (single, debate, planner-worker). The answer $\hat y$ and execution trace $\tau$ pass through a failure detector;
+on failure, attribution identifies the culprit agent and step, and the repair policy reprompts, replaces, bypasses the agent or
+switches topology. Dashed elements: the fault injector (evaluation only) and the router-update feedback. All calls share one
+token budget. Vector version: `docs/fig_architecture.pdf`; regenerate with `python docs/make_figure.py`.
 
 ## Components
 1. **Learned router** (contextual bandit) - picks the cheapest architecture likely to succeed.
