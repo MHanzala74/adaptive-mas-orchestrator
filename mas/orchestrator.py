@@ -33,7 +33,7 @@ class Orchestrator:
             seed: int = 0, llm: BaseLLM | None = None) -> RunResult:
         llm = llm or MockLLM(seed=seed)
         meter = TokenMeter(budget)             # one shared budget across all attempts
-        fault_fns = build_faults(faults or [])
+        fault_fns = build_faults(faults or [], salt=str(seed))
         arch_name = (self.router.select(featurize(task.question), budget, explore=False)
                      if self.router else self.default_arch)
         overrides: dict[str, dict] = {}
@@ -45,9 +45,10 @@ class Orchestrator:
                             "detected_failure": self._failed(res)})
             if not self._failed(res) or attempt > self.max_repairs or res.budget_exceeded:
                 break
-            at = self.attributor.attribute(res) if self.attributor else None
-            if at is None:
-                break
+            if self.attributor is None:      # ablation: blind retry, nothing changes
+                history[-1]["repair"] = "retry"
+                continue
+            at = self.attributor.attribute(res)
             attr_tokens += at.tokens
             act = self.policy.plan(at, arch_name, attempt, overrides)
             history[-1].update({"blamed": at.agent, "reason": at.reason, "repair": act.kind})

@@ -21,7 +21,7 @@ identify the responsible agent/step and repair its own topology?
 - [x] Repair policy + self-healing orchestrator (`mas/repair.py`, `mas/orchestrator.py`: route -> run -> detect -> attribute -> reprompt/replace/bypass/switch topology, shared token budget)
 - [x] FastAPI service (`api/main.py`: `/solve`, `/router/train`, `/faults/sweep`, `/architectures`, `/health`)
 - [x] Statistics (`mas/stats.py`: bootstrap CIs, paired differences) and main comparison (`experiments/main_results.py`)
-- [ ] Ablations (router / attribution / repair / topology switch)
+- [x] Ablations (`experiments/ablation.py` -> `results/ablation.md`: never / blind retry / attribution / attribution+switch / oracle trigger)
 - [ ] Technical report
 
 ## Early observations (mock backend, 100 tasks, rule attributor)
@@ -74,3 +74,21 @@ What this says, honestly:
 5. The oracle (0.86) is *not* a realistic ceiling: it picks per-sample on realised noise.
 
 **Limitation:** all numbers come from a simulated solver whose structure was chosen by me (hence two environments). Real conclusions require `LLM_BACKEND=anthropic` on GSM8K/HumanEval/HotpotQA.
+
+## Ablation findings (SIMULATED mock solver; 3 seeds x 100 tasks; full table in `results/ablation.md`)
+| Finding | Evidence (accuracy) |
+|---|---|
+| **Attribution + replace recovers detectable faults** (loop/silent) | single: 0.00 -> 0.57; planner_worker: 0.00 -> 0.67; debate: 0.70 -> 0.85 |
+| **Blind retry is useless against persistent faults and wastes 3x tokens** | single loop@1.0: 0.00 at 108 tokens vs 0.57 at 72 with attribution |
+| **Attribution beats blind retry on intermittent faults, and is cheaper** | single loop@0.5: 0.51 / 63 tok (blind) vs 0.57 / 54 tok; planner_worker: 0.53 vs 0.65 |
+| **Confidently-wrong faults are invisible to the detector** | single/planner_worker wrong & malicious: no method but the oracle trigger moves accuracy off ~0 |
+| **Negative result: repairing debate on disagreement hurts** | debate wrong@1.0: 0.59 (never) -> 0.54 (attr), tokens 255 -> 740 |
+| **Topology switch added nothing here** | `attr (no switch)` == `attr + switch` in every scenario: replace/reprompt fixed things before escalation was needed |
+
+Caveats: `oracle trigger` knows ground-truth correctness, so it is best-of-n with a perfect verifier - an upper bound, not a deployable method.
+An intermittent-fault RNG bug (all-or-nothing per seed) was found and fixed during this study; a regression test covers it.
+
+### What the findings imply for next steps
+1. Add a **verifier/self-consistency signal** so wrong-but-confident outputs can be detected (the main gap).
+2. Make the debate trigger **consensus-margin aware** instead of "any disagreement".
+3. Design a fault scenario where the **topology switch** is actually necessary (e.g. a shared-role failure), otherwise it remains unproven.

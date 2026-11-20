@@ -13,7 +13,7 @@ def run_once(task, arch: str, *, llm: BaseLLM | None = None, seed: int = 0,
              budget: int | None = None, faults: list[FaultSpec] | None = None,
              overrides: dict | None = None) -> RunResult:
     ctx = Context(llm or MockLLM(seed=seed), TokenMeter(budget),
-                  faults=build_faults(faults or []), overrides=overrides or {})
+                  faults=build_faults(faults or [], salt=str(seed)), overrides=overrides or {})
     return make(arch).run(task, ctx)
 
 

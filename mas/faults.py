@@ -26,9 +26,11 @@ class FaultSpec:
     prob: float = 1.0      # per-call probability the fault triggers
     seed: int = 0
 
-    def build(self):
+    def build(self, salt: str = ""):
+        """`salt` (e.g. the run seed) decorrelates intermittent faults across runs;
+        without it every run would replay the same draw sequence."""
         assert self.kind in FAULT_KINDS, self.kind
-        rng = random.Random(f"{self.seed}|{self.agent}|{self.kind}")
+        rng = random.Random(f"{self.seed}|{self.agent}|{self.kind}|{salt}")
 
         def fn(agent: str, text: str) -> str:
             if rng.random() > self.prob:
@@ -46,5 +48,5 @@ class FaultSpec:
         return fn
 
 
-def build_faults(specs: list[FaultSpec]) -> dict:
-    return {s.agent: s.build() for s in specs}
+def build_faults(specs: list[FaultSpec], salt: str = "") -> dict:
+    return {s.agent: s.build(salt) for s in specs}

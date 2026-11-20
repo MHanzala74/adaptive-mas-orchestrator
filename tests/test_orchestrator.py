@@ -30,3 +30,9 @@ def test_oracle_trigger_upper_bound_ge_detector():
     det, _, _ = acc(Orchestrator(trigger="detector"), f)
     ora, _, _ = acc(Orchestrator(trigger="oracle"), f)
     assert ora >= det
+
+def test_blind_retry_cannot_fix_persistent_fault_but_attribution_can():
+    f = [FaultSpec("solo", "loop")]
+    blind, _, _ = acc(Orchestrator(trigger="detector", attributor=None), f)
+    attr, _, _ = acc(Orchestrator(trigger="detector"), f)
+    assert blind == 0.0 and attr > 0.5
