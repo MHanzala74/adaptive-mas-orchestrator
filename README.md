@@ -13,7 +13,7 @@ identify the responsible agent/step and repair its own topology?
 ## Status
 - [x] Project skeleton
 - [x] LLM layer with token/cost accounting (`mas/llm.py`: `TokenMeter`, hard budget, Mock + Anthropic backends)
-- [ ] Benchmarks
+- [x] Benchmarks (`mas/benchmarks/tasks.py`: synthetic difficulty-graded arithmetic, GSM8K jsonl loader, train/test split)
 - [ ] Architectures (single / debate / planner-worker)
 - [ ] Router
 - [ ] Fault injection
