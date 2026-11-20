@@ -17,12 +17,14 @@ from mas.repair import RepairPolicy
 from mas.stats import bootstrap_ci
 
 VICTIM = {"single": "solo", "debate": "debater_0", "planner_worker": "worker"}
-SCENARIOS = [("wrong", 1.0), ("malicious", 1.0), ("loop", 1.0), ("silent", 1.0), ("wrong", 0.5), ("loop", 0.5)]
+SCENARIOS = [("clean", 0.0), ("wrong", 1.0), ("malicious", 1.0), ("loop", 1.0), ("silent", 1.0), ("wrong", 0.5), ("loop", 0.5)]
 CONFIGS = {
     "never": lambda a: Orchestrator(default_arch=a, trigger="never"),
     "blind_retry": lambda a: Orchestrator(default_arch=a, trigger="detector", attributor=None),
     "attr (no switch)": lambda a: Orchestrator(default_arch=a, attributor=RuleAttributor(), policy=RepairPolicy(False)),
     "attr + switch": lambda a: Orchestrator(default_arch=a, attributor=RuleAttributor(), policy=RepairPolicy(True)),
+    "attr (no switch) + verifier": lambda a: Orchestrator(default_arch=a, attributor=RuleAttributor(), policy=RepairPolicy(False), verify=True),
+    "attr + switch + verifier": lambda a: Orchestrator(default_arch=a, attributor=RuleAttributor(), verify=True),
     "oracle trigger": lambda a: Orchestrator(default_arch=a, trigger="oracle", policy=RepairPolicy(True)),
 }
 
@@ -39,7 +41,7 @@ def main(n, seeds):
             for name, mk in CONFIGS.items():
                 orch, c, tk = mk(arch), [], []
                 for sd in seeds:
-                    f = [FaultSpec(VICTIM[arch], kind, p, seed=sd)]
+                    f = [] if kind == "clean" else [FaultSpec(VICTIM[arch], kind, p, seed=sd)]
                     for i, t in enumerate(tasks):
                         r = orch.run(t, faults=f, seed=sd * 7919 + i)
                         c.append(int(r.correct)); tk.append(r.tokens)

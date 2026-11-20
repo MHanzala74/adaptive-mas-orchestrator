@@ -8,7 +8,7 @@ from mas.attribution import RuleAttributor
 from mas.benchmarks.tasks import check
 from mas.core import Context, RunResult
 from mas.faults import FaultSpec, build_faults
-from mas.llm import BaseLLM, MockLLM, TokenMeter
+from mas.llm import BaseLLM, BudgetExceeded, MockLLM, TokenMeter, parse_answer
 from mas.repair import RepairPolicy, detect_failure
 from mas.router.features import featurize
 
@@ -21,13 +21,24 @@ class Orchestrator:
     policy: RepairPolicy = field(default_factory=RepairPolicy)
     max_repairs: int = 2
     trigger: str = "detector"               # detector | oracle | never
+    verify: bool = False                    # extra independent re-solve; mismatch => failure
 
-    def _failed(self, res: RunResult) -> bool:
+    def _failed(self, res: RunResult, task=None, llm=None, meter=None) -> tuple[bool, str]:
         if self.trigger == "never":
-            return False
+            return False, "off"
         if self.trigger == "oracle":
-            return not res.correct
-        return detect_failure(res)
+            return (not res.correct), "oracle"
+        if detect_failure(res):
+            return True, "detector"
+        if self.verify and task is not None and not res.budget_exceeded:
+            try:   # independent verifier: a fresh solver call outside the traced topology
+                out = llm.call(meter, "AGENT:verifier\nSolve independently. End with 'ANSWER: <number>'.",
+                               f"QUESTION: {task.question}\nDIFFICULTY: {task.difficulty}", 0.2)
+            except BudgetExceeded:
+                return False, "verifier skipped (budget)"
+            if parse_answer(out.text) != res.answer:
+                return True, "verifier mismatch"
+        return False, "ok"
 
     def run(self, task, *, budget: int | None = None, faults: list[FaultSpec] | None = None,
             seed: int = 0, llm: BaseLLM | None = None) -> RunResult:
@@ -41,9 +52,10 @@ class Orchestrator:
         for attempt in range(1, self.max_repairs + 2):
             ctx = Context(llm, meter, faults=fault_fns, overrides=dict(overrides))
             res = make(arch_name).run(task, ctx)
+            failed, signal = self._failed(res, task, llm, meter)
             history.append({"attempt": attempt, "arch": arch_name, "answer": res.answer,
-                            "detected_failure": self._failed(res)})
-            if not self._failed(res) or attempt > self.max_repairs or res.budget_exceeded:
+                            "detected_failure": failed, "signal": signal})
+            if not failed or attempt > self.max_repairs or res.budget_exceeded:
                 break
             if self.attributor is None:      # ablation: blind retry, nothing changes
                 history[-1]["repair"] = "retry"

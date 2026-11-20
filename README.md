@@ -88,7 +88,19 @@ What this says, honestly:
 Caveats: `oracle trigger` knows ground-truth correctness, so it is best-of-n with a perfect verifier - an upper bound, not a deployable method.
 An intermittent-fault RNG bug (all-or-nothing per seed) was found and fixed during this study; a regression test covers it.
 
+### Follow-up: verifier signal + topology switch (addresses gaps 1 and 3 below)
+`verify=True` adds one independent re-solve; a mismatch with the topology's answer counts as a failure.
+| Scenario | attr (no switch) | + verifier, **no switch** | + verifier, **+ switch** |
+|---|---|---|---|
+| single, wrong@1.0 | 0.02 / 36 tok | 0.04 / 143 | **0.79** / 397 |
+| planner_worker, wrong@1.0 | 0.01 / 80 | 0.01 / 230 | **0.83** / 494 |
+| single, clean | 0.57 / 36 | 0.68 / 115 | 0.85 / 227 |
+
+- The verifier makes confident-wrong faults *visible*, but **only the topology switch repairs them** (the faulty agent persists; fresh agents in a new topology escape it). This is the first scenario where switching is demonstrably necessary.
+- **Caution on the clean row:** the 0.85 is mostly extra test-time compute (verified retries escalating to debate), not fault repair. Budget-matched comparison: plain debate = 0.82 @ 255 tokens vs 0.85 @ 227 here - roughly parity, *not* a win.
+- Debate under wrong/malicious faults is still not rescued by the verifier (0.55): unsolved.
+
 ### What the findings imply for next steps
-1. Add a **verifier/self-consistency signal** so wrong-but-confident outputs can be detected (the main gap).
+1. ~~Add a verifier signal~~ done (see above); next: replace the same-model verifier with a cheaper/different one and measure false-alarm cost.
 2. Make the debate trigger **consensus-margin aware** instead of "any disagreement".
-3. Design a fault scenario where the **topology switch** is actually necessary (e.g. a shared-role failure), otherwise it remains unproven.
+3. ~~Scenario where the switch is necessary~~ done (persistent wrong-answer fault); next: shared-role failures that follow the agent across topologies.

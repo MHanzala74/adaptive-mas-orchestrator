@@ -36,3 +36,10 @@ def test_blind_retry_cannot_fix_persistent_fault_but_attribution_can():
     blind, _, _ = acc(Orchestrator(trigger="detector", attributor=None), f)
     attr, _, _ = acc(Orchestrator(trigger="detector"), f)
     assert blind == 0.0 and attr > 0.5
+
+def test_verifier_detects_confident_wrong_and_switch_recovers():
+    f = [FaultSpec("solo", "wrong")]
+    plain, _, _ = acc(Orchestrator(trigger="detector"), f)
+    ver, tok, rs = acc(Orchestrator(trigger="detector", verify=True), f)
+    assert plain < 0.05 and ver > 0.3
+    assert any(h.get("repair") == "switch" for r in rs for h in r.meta["history"])
