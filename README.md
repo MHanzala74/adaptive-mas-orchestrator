@@ -149,3 +149,16 @@ The headline experiments (`main_results.py`, `ablation.py`) still use the origin
 ### F3. Router persistence and run logging
 - `LinUCBRouter.save/load` (JSON). The API restores `results/router.json` on startup; `POST /router/save` writes it (fixed path, no user-supplied paths).
 - `mas/runlog.py`: every `/solve` call is appended to `results/runs.jsonl` (answer, tokens, attempts, full trace, repair history). `GET /runs?limit=N` shows recent runs. Disable with `RUN_LOG_ENABLED=0`.
+
+### F4. Failure taxonomy (`mas/taxonomy.py`, `experiments/taxonomy.py`)
+Every wrong answer is classified into one of 8 causes: budget exceeded, degenerate output, no answer, injected fault propagated,
+unanimous wrong, vote lost correct (a debater had the right answer but the vote discarded it), split all wrong, natural error.
+Output: `results/taxonomy.md`, `docs/fig_taxonomy.png/pdf` (grayscale, hatched, journal style).
+
+<p align="center"><img src="docs/fig_taxonomy.png" width="800" alt="Failure taxonomy"></p>
+
+**Fig. 2.** Failure causes by architecture and fault scenario (200 tasks, simulated solver).
+
+Observations: (i) in clean debate, **18 of the 21 failure points are "vote lost correct"** - a right answer existed among the debaters but
+majority voting threw it away, which suggests a verifier-based aggregator rather than a plain vote; (ii) `unanimous wrong` is 0.00 only because
+the mock draws errors independently - real LLMs make *correlated* errors, so this bar will be larger on real data.
