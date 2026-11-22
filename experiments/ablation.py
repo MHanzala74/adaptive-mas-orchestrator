@@ -25,6 +25,7 @@ CONFIGS = {
     "attr + switch": lambda a: Orchestrator(default_arch=a, attributor=RuleAttributor(), policy=RepairPolicy(True)),
     "attr (no switch) + verifier": lambda a: Orchestrator(default_arch=a, attributor=RuleAttributor(), policy=RepairPolicy(False), verify=True),
     "attr + switch + verifier": lambda a: Orchestrator(default_arch=a, attributor=RuleAttributor(), verify=True),
+    "attr + switch (margin 2/3)": lambda a: Orchestrator(default_arch=a, attributor=RuleAttributor(), min_agreement=0.66),
     "oracle trigger": lambda a: Orchestrator(default_arch=a, trigger="oracle", policy=RepairPolicy(True)),
 }
 

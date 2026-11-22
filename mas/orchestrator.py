@@ -21,6 +21,7 @@ class Orchestrator:
     policy: RepairPolicy = field(default_factory=RepairPolicy)
     max_repairs: int = 2
     trigger: str = "detector"               # detector | oracle | never
+    min_agreement: float = 1.0              # debate: share of agents that must agree (1.0 = unanimity)
     verify: bool = False                    # extra independent re-solve; mismatch => failure
 
     def _failed(self, res: RunResult, task=None, llm=None, meter=None) -> tuple[bool, str]:
@@ -28,7 +29,7 @@ class Orchestrator:
             return False, "off"
         if self.trigger == "oracle":
             return (not res.correct), "oracle"
-        if detect_failure(res):
+        if detect_failure(res, self.min_agreement):
             return True, "detector"
         if self.verify and task is not None and not res.budget_exceeded:
             try:   # independent verifier: a fresh solver call outside the traced topology

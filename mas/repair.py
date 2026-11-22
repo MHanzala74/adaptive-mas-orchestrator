@@ -42,8 +42,13 @@ class RepairPolicy:
         return RepairAction("none", note=why)
 
 
-def detect_failure(res: RunResult) -> bool:
-    """Ground-truth-free failure signals available at inference time."""
+def detect_failure(res: RunResult, min_agreement: float = 1.0) -> bool:
+    """Ground-truth-free failure signals available at inference time.
+
+    min_agreement: for debate, minimum share of agents that must agree on the final
+    answer. 1.0 = any disagreement is a failure (original behaviour); 0.66 = a 2-of-3
+    majority is accepted (consensus-margin aware).
+    """
     from mas.attribution import is_degenerate, NON_ANSWERING
     if res.answer is None or res.budget_exceeded:
         return True
@@ -54,6 +59,8 @@ def detect_failure(res: RunResult) -> bool:
         for s in res.trace:
             if s.agent not in NON_ANSWERING:
                 last[s.agent] = s.answer
-        if len(set(last.values())) > 1:
-            return True
+        if last:
+            top = max(list(last.values()).count(v) for v in last.values())
+            if top / len(last) < min_agreement - 1e-9:
+                return True
     return False

@@ -121,3 +121,17 @@ export LLM_BACKEND=anthropic ANTHROPIC_API_KEY=...   # or: LLM_BACKEND=openai OP
 python experiments/main_results.py --n-train 100 --n-test 100   # costs real API tokens; start small
 ```
 The synthetic arithmetic generator is the only built-in benchmark; use `mas.benchmarks.tasks.load_gsm8k_jsonl` for GSM8K-format files.
+
+## Feature log
+### F1. Consensus-margin-aware failure detector (`Orchestrator(min_agreement=0.66)`)
+The earlier negative result (repairing debate on *any* disagreement hurt accuracy and tripled tokens) came from treating a normal 2-vs-1 vote as a failure.
+Accepting a 2-of-3 majority and repairing only genuine splits gives (debate, 3 seeds x 100 tasks, `results/ablation.md`):
+
+| Fault | never | strict (any disagreement) | **margin 2/3** |
+|---|---|---|---|
+| wrong@1.0 | 0.58 / 255 tok | 0.56 / 744 | **0.79 / 411** |
+| malicious@1.0 | 0.58 / 255 | 0.53 / 745 | **0.79 / 418** |
+| loop@1.0 | 0.70 / 255 | 0.85 / 648 | **0.92 / 566** |
+| clean | 0.82 / 255 | 0.87 / 524 | 0.93 / 336 |
+
+Caveat: the clean-row gain is partly extra test-time compute (retrying 3-way splits), not fault repair. Simulated solver.

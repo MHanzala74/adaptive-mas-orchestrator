@@ -43,3 +43,10 @@ def test_verifier_detects_confident_wrong_and_switch_recovers():
     ver, tok, rs = acc(Orchestrator(trigger="detector", verify=True), f)
     assert plain < 0.05 and ver > 0.3
     assert any(h.get("repair") == "switch" for r in rs for h in r.meta["history"])
+
+def test_margin_aware_detector_accepts_2_of_3():
+    from mas.core import RunResult, Step
+    from mas.repair import detect_failure
+    tr = [Step(0, "debater_0", "", "ANSWER: 5", "5"), Step(1, "debater_1", "", "ANSWER: 5", "5"), Step(2, "debater_2", "", "ANSWER: 9", "9")]
+    res = RunResult("t", "debate", "5", True, 0, 3, tr)
+    assert detect_failure(res, 1.0) and not detect_failure(res, 0.66)
