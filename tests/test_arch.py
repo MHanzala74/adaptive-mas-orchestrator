@@ -27,3 +27,15 @@ def test_debate_beats_single_on_average():
     ts = generate_synthetic(120, seed=3)
     acc = {a: sum(run(a, t, seed=i).correct for i, t in enumerate(ts)) / len(ts) for a in ("single", "debate")}
     assert acc["debate"] >= acc["single"]
+
+def test_solver_critic_flow_and_bypass():
+    t = generate_synthetic(1)[0]
+    r = run("solver_critic", t)
+    assert [s.agent for s in r.trace][:2] == ["solver", "critic"] and 2 <= r.calls <= 3
+    b = run("solver_critic", t, overrides={"critic": {"action": "bypass"}})
+    assert [s.agent for s in b.trace] == ["solver"]
+
+def test_solver_critic_beats_single_on_average():
+    ts = generate_synthetic(150, seed=4)
+    acc = {a: sum(run(a, t, seed=i).correct for i, t in enumerate(ts)) / len(ts) for a in ("single", "solver_critic")}
+    assert acc["solver_critic"] > acc["single"]

@@ -5,7 +5,7 @@ c = TestClient(app)
 
 def test_health_and_archs():
     assert c.get("/health").json()["status"] == "ok"
-    assert set(c.get("/architectures").json()["architectures"]) == {"single", "debate", "planner_worker"}
+    assert set(c.get("/architectures").json()["architectures"]) == {"single", "debate", "planner_worker", "solver_critic"}
 
 def test_solve_with_fault_and_repair():
     body = {"question": "(3 + 4) * 5", "answer": "35", "architecture": "single",
@@ -21,7 +21,7 @@ def test_train_router_then_route():
     info = c.post("/router/train", json={"n_tasks": 40, "lam": 0.5}).json()
     assert info["n_tasks"] == 40
     r = c.post("/solve", json={"question": "2 + 3 * 4", "answer": "14"}).json()
-    assert r["meta"]["final_arch"] in {"single", "debate", "planner_worker"}
+    assert r["meta"]["final_arch"] in {"single", "debate", "planner_worker", "solver_critic"}
 
 def test_sweep():
     rows = c.post("/faults/sweep", json={"n_tasks": 10}).json()["rows"]

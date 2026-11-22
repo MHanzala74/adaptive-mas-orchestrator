@@ -51,10 +51,29 @@ class PlannerWorker(Architecture):
         return parse_answer(ctx.ask("worker", SOLVER, prompt, 0.3))
 
 
+class SolverCritic(Architecture):
+    """solver answers -> critic re-solves independently -> on mismatch solver revises."""
+    name = "solver_critic"
+    agents = ["solver", "critic"]
+
+    def solve(self, task, ctx: Context):
+        a1 = parse_answer(ctx.ask("solver", SOLVER, _q(task), 0.3))
+        if ctx.bypassed("critic"):
+            return a1
+        crit = ctx.ask("critic", "You are an independent reviewer. Solve it yourself and end with 'ANSWER: <number>'.",
+                       f"{_q(task)}\nPROPOSED: {a1}", 0.2)
+        a2 = parse_answer(crit)
+        if a2 is not None and a2 == a1:
+            return a1
+        prompt = f"{_q(task)}\nCRITIQUE: a reviewer got {a2}, you got {a1}. Re-solve carefully."
+        return parse_answer(ctx.ask("solver", SOLVER, prompt, 0.3)) or a1
+
+
 REGISTRY = {
     "single": SingleAgent,
     "debate": Debate,
     "planner_worker": PlannerWorker,
+    "solver_critic": SolverCritic,
 }
 
 

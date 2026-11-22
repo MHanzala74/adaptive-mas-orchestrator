@@ -135,3 +135,13 @@ Accepting a 2-of-3 majority and repairing only genuine splits gives (debate, 3 s
 | clean | 0.82 / 255 | 0.87 / 524 | 0.93 / 336 |
 
 Caveat: the clean-row gain is partly extra test-time compute (retrying 3-way splits), not fault repair. Simulated solver.
+
+### F2. New architecture: `solver_critic` (agents: `solver`, `critic`)
+Solver answers; an independent critic re-solves; on mismatch the solver revises with the critique. 2-3 calls. It is registered in
+`REGISTRY`, so the router, repair policy (critic is bypassable; escalates to debate), API and fault testbed pick it up automatically.
+The system now has **8 solving agents** (solo, debater_0-2, planner, worker, solver, critic).
+
+Mock result (200 tasks): single 0.67 @ 36 tok, planner_worker 0.68 @ 80, **solver_critic 0.82 @ 107**, debate 0.78 @ 255.
+**Do not read this as evidence that critic beats debate:** the gain comes from `critique_bonus=0.12`, a parameter I chose in the simulator.
+Attribution is trivially 1.00 here because the injected fault sits on the final answerer. Only a real-LLM run can show whether it holds.
+The headline experiments (`main_results.py`, `ablation.py`) still use the original 3 architectures so earlier numbers stay comparable.

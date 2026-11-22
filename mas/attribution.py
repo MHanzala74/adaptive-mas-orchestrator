@@ -14,7 +14,8 @@ from dataclasses import dataclass
 from mas.core import RunResult, Step
 from mas.llm import BaseLLM, TokenMeter, get_llm
 
-NON_ANSWERING = {"planner"}   # agents whose output is not a final numeric answer
+NON_ANSWERING = {"planner"}
+FINAL_ANSWERER = {"solver_critic": "solver"}   # who owns the final answer when no outlier signal exists   # agents whose output is not a final numeric answer
 
 
 @dataclass
@@ -88,7 +89,7 @@ class RuleAttributor:
                 return Attribution(worst, _anomalous_step(res.trace, worst) , "most rounds in disagreement", "outlier")
         # 3) fall back: last answering agent (the one that produced the final answer)
         if last:
-            agent = list(last)[-1]
+            agent = FINAL_ANSWERER.get(res.architecture) or list(last)[-1]
             return Attribution(agent, last[agent].idx, "default: final answerer", "unknown")
         return Attribution(None, None, "empty trace")
 

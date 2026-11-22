@@ -95,6 +95,7 @@ class MockLLM(BaseLLM):
     difficulty_penalty: float = 0.18      # per difficulty level above 1
     debate_bonus: float = 0.10
     plan_bonus: float = 0.08
+    critique_bonus: float = 0.12
     seed: int = 0
     # hetero=True: debate helps mostly on HARD tasks (sensitivity scenario, env MOCK_HETERO=1)
     hetero: bool = field(default_factory=lambda: os.getenv("MOCK_HETERO") == "1")
@@ -125,6 +126,8 @@ class MockLLM(BaseLLM):
                 p += (0.02 + 0.10 * (diff - 1)) if self.hetero else self.debate_bonus
             if "PLAN:" in prompt:
                 p += self.plan_bonus
+            if "CRITIQUE:" in prompt:
+                p += self.critique_bonus
             p = min(0.99, max(0.02, p))
             if self._rand(expr) < p:
                 ans = truth
