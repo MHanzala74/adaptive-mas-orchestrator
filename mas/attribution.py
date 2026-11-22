@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from mas.core import RunResult, Step
 from mas.llm import BaseLLM, TokenMeter, get_llm
 
-NON_ANSWERING = {"planner"}
+NON_ANSWERING = {"planner", "judge"}
 FINAL_ANSWERER = {"solver_critic": "solver"}   # who owns the final answer when no outlier signal exists   # agents whose output is not a final numeric answer
 
 

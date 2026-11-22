@@ -7,8 +7,8 @@ from mas.attribution import Attribution
 from mas.core import RunResult
 
 # agents that can be dropped without the architecture becoming meaningless
-BYPASSABLE = {"debater_0", "debater_1", "debater_2", "planner", "critic"}
-ESCALATE = {"single": "debate", "planner_worker": "debate", "debate": "planner_worker", "solver_critic": "debate"}
+BYPASSABLE = {"debater_0", "debater_1", "debater_2", "planner", "critic", "judge"}
+ESCALATE = {"single": "debate", "planner_worker": "debate", "debate": "planner_worker", "solver_critic": "debate", "debate_judge": "planner_worker"}
 
 
 @dataclass
@@ -54,7 +54,7 @@ def detect_failure(res: RunResult, min_agreement: float = 1.0) -> bool:
         return True
     if any(is_degenerate(s.output) for s in res.trace):
         return True
-    if res.architecture == "debate":
+    if res.architecture in ("debate", "debate_judge"):
         last: dict[str, str | None] = {}
         for s in res.trace:
             if s.agent not in NON_ANSWERING:

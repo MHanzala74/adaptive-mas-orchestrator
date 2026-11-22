@@ -162,3 +162,26 @@ Output: `results/taxonomy.md`, `docs/fig_taxonomy.png/pdf` (grayscale, hatched, 
 Observations: (i) in clean debate, **18 of the 21 failure points are "vote lost correct"** - a right answer existed among the debaters but
 majority voting threw it away, which suggests a verifier-based aggregator rather than a plain vote; (ii) `unanimous wrong` is 0.00 only because
 the mock draws errors independently - real LLMs make *correlated* errors, so this bar will be larger on real data.
+
+### F5. `debate_judge` architecture (data-driven from F4)
+Same 3-debater, 2-round debate, but when the vote has **no majority** (all answers differ) a `judge` agent re-solves independently and breaks the tie;
+the judge is only called on splits. Registered in `REGISTRY` (escalates to planner_worker on repair; `judge` is bypassable).
+
+| (400 tasks, simulated solver) | accuracy [95% CI] | tokens/task | judge called |
+|---|---|---|---|
+| debate | 0.795 [0.755, 0.833] | 255 | 0% |
+| **debate_judge** | **0.853 [0.817, 0.887]** | **264** | 23% |
+
+Paired difference +0.058 [0.035, 0.083], significant, for about 9 extra tokens per task. Caveats: the mock draws errors independently, so a fresh
+judge solve is far more informative than it would be for a real model with correlated errors; the judge is the same model as the debaters.
+Treat as a hypothesis to test on real data, not a result.
+
+## Features added in this iteration (summary)
+| # | Feature | Where |
+|---|---|---|
+| F1 | Consensus-margin-aware failure detector | `mas/repair.py`, `Orchestrator(min_agreement=)` |
+| F2 | `solver_critic` architecture (2 agents) | `mas/architectures/impl.py` |
+| F3 | Router save/load, JSONL run log, `/router/save`, `/runs` | `mas/router/bandit.py`, `mas/runlog.py`, `api/main.py` |
+| F4 | Failure taxonomy (8 causes) + Fig. 2 | `mas/taxonomy.py`, `experiments/taxonomy.py` |
+| F5 | `debate_judge` architecture (tie-break judge) | `mas/architectures/impl.py` |
+| - | OpenAI backend (earlier) | `mas/llm.py` |

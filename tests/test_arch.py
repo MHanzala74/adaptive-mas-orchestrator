@@ -39,3 +39,12 @@ def test_solver_critic_beats_single_on_average():
     ts = generate_synthetic(150, seed=4)
     acc = {a: sum(run(a, t, seed=i).correct for i, t in enumerate(ts)) / len(ts) for a in ("single", "solver_critic")}
     assert acc["solver_critic"] > acc["single"]
+
+def test_debate_judge_only_calls_judge_on_split_and_helps():
+    ts = generate_synthetic(300, seed=8)
+    rd = [run("debate", t, seed=i) for i, t in enumerate(ts)]
+    rj = [run("debate_judge", t, seed=i) for i, t in enumerate(ts)]
+    called = [any(s.agent == "judge" for s in r.trace) for r in rj]
+    assert 0 < sum(called) < len(ts) // 2
+    assert sum(r.correct for r in rj) >= sum(r.correct for r in rd)
+    assert sum(r.tokens for r in rj) < 1.3 * sum(r.tokens for r in rd)

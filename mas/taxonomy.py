@@ -22,7 +22,7 @@ def classify(res: RunResult, task) -> str:
         return "no_answer"
     if any(s.faulted for s in res.trace):
         return "injected_fault_propagated"
-    if res.architecture == "debate":
+    if res.architecture in ("debate", "debate_judge"):
         last = {}
         for s in res.trace:
             if s.agent not in NON_ANSWERING:
