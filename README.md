@@ -145,3 +145,7 @@ Mock result (200 tasks): single 0.67 @ 36 tok, planner_worker 0.68 @ 80, **solve
 **Do not read this as evidence that critic beats debate:** the gain comes from `critique_bonus=0.12`, a parameter I chose in the simulator.
 Attribution is trivially 1.00 here because the injected fault sits on the final answerer. Only a real-LLM run can show whether it holds.
 The headline experiments (`main_results.py`, `ablation.py`) still use the original 3 architectures so earlier numbers stay comparable.
+
+### F3. Router persistence and run logging
+- `LinUCBRouter.save/load` (JSON). The API restores `results/router.json` on startup; `POST /router/save` writes it (fixed path, no user-supplied paths).
+- `mas/runlog.py`: every `/solve` call is appended to `results/runs.jsonl` (answer, tokens, attempts, full trace, repair history). `GET /runs?limit=N` shows recent runs. Disable with `RUN_LOG_ENABLED=0`.

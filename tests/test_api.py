@@ -26,3 +26,13 @@ def test_train_router_then_route():
 def test_sweep():
     rows = c.post("/faults/sweep", json={"n_tasks": 10}).json()["rows"]
     assert len(rows) == 15
+
+def test_save_router_and_run_log(tmp_path, monkeypatch):
+    import api.main as m
+    monkeypatch.setattr(m, "ROUTER_PATH", str(tmp_path / "router.json"))
+    monkeypatch.setattr(m, "RUN_LOG", str(tmp_path / "runs.jsonl"))
+    c.post("/router/train", json={"n_tasks": 30})
+    assert c.post("/router/save").status_code == 200 and (tmp_path / "router.json").exists()
+    c.post("/solve", json={"question": "2 + 2", "answer": "4"})
+    r = c.get("/runs").json()
+    assert r["n"] == 1 and r["runs"][0]["tokens"] > 0

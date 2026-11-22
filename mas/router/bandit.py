@@ -1,6 +1,9 @@
 """Budget-aware LinUCB router over architectures."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 
 from mas.router.features import DIM
@@ -41,3 +44,26 @@ class LinUCBRouter:
         self.b[arm] += reward * x
         self.cost_sum[arm] += tokens
         self.cost_n[arm] += 1
+
+    # ---- persistence ----
+    def to_dict(self) -> dict:
+        return {"arms": self.arms, "alpha": self.alpha,
+                "A": {a: self.A[a].tolist() for a in self.arms}, "b": {a: self.b[a].tolist() for a in self.arms},
+                "cost_sum": self.cost_sum, "cost_n": self.cost_n}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "LinUCBRouter":
+        dim = len(d["b"][d["arms"][0]])
+        r = cls(d["arms"], alpha=d["alpha"], dim=dim)
+        r.A = {a: np.array(d["A"][a]) for a in r.arms}
+        r.b = {a: np.array(d["b"][a]) for a in r.arms}
+        r.cost_sum, r.cost_n = dict(d["cost_sum"]), dict(d["cost_n"])
+        return r
+
+    def save(self, path: str | Path) -> None:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_text(json.dumps(self.to_dict()))
+
+    @classmethod
+    def load(cls, path: str | Path) -> "LinUCBRouter":
+        return cls.from_dict(json.loads(Path(path).read_text()))

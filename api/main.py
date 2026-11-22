@@ -15,10 +15,20 @@ from mas.orchestrator import Orchestrator
 from mas.repair import RepairPolicy
 from mas.router.bandit import LinUCBRouter
 from mas.router.train import collect_log, fit_full_info
+from mas.runlog import append_run, read_runs
 from mas.testbed import fault_sweep
+import os
 
 app = FastAPI(title="Adaptive Multi-Agent Orchestrator", version="0.1.0")
 STATE: dict = {"router": None, "router_info": None}
+ROUTER_PATH = "results/router.json"                       # fixed path: API never writes arbitrary files
+RUN_LOG = os.getenv("RUN_LOG", "results/runs.jsonl")
+if os.path.exists(ROUTER_PATH):                           # restore a previously trained router
+    try:
+        STATE["router"] = LinUCBRouter.load(ROUTER_PATH)
+        STATE["router_info"] = {"restored_from": ROUTER_PATH}
+    except Exception:
+        pass
 ARCHS = list(REGISTRY)
 
 
@@ -79,6 +89,8 @@ def solve(req: SolveIn):
                    seed=req.seed, llm=llm)
     out = res.to_dict()
     out["correct"] = check(task, res.answer) if req.answer is not None else None
+    if os.getenv("RUN_LOG_ENABLED", "1") == "1":
+        append_run(RUN_LOG, res, {"question": req.question, "budget": req.budget})
     return out
 
 
@@ -90,6 +102,21 @@ def train_router(req: TrainIn):
     STATE["router_info"] = {"n_tasks": len(tr), "lam": req.lam,
                             "mean_cost": {a: STATE["router"].expected_cost(a) for a in ARCHS}}
     return STATE["router_info"]
+
+
+@app.post("/router/save")
+def save_router():
+    if STATE["router"] is None:
+        raise HTTPException(409, "no trained router")
+    STATE["router"].save(ROUTER_PATH)
+    return {"saved": ROUTER_PATH}
+
+
+@app.get("/runs")
+def runs(limit: int = 20):
+    rows = read_runs(RUN_LOG)[-max(1, min(limit, 200)):]
+    return {"n": len(rows), "runs": [{k: r[k] for k in ("ts", "task_id", "architecture", "answer", "tokens", "attempts", "correct") if k in r}
+                                      | {"final_arch": r.get("meta", {}).get("final_arch")} for r in rows]}
 
 
 @app.get("/router/status")

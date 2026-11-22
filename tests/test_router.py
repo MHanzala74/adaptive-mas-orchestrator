@@ -27,3 +27,13 @@ def test_budget_filter():
     r = LinUCBRouter(ARCHS)
     r.update("single", np.ones(DIM), 0.5, 40); r.update("debate", np.ones(DIM), 0.9, 300)
     assert r.select(np.ones(DIM), budget=100, explore=False) != "debate"
+
+def test_router_save_load_roundtrip(tmp_path):
+    tr, te = split(generate_synthetic(60, seed=2))
+    r = fit_full_info(LinUCBRouter(ARCHS, alpha=0.0), collect_log(tr, ARCHS), 0.4)
+    r.save(tmp_path / "r.json")
+    r2 = LinUCBRouter.load(tmp_path / "r.json")
+    for rec in collect_log(te, ARCHS):
+        x = np.array(rec["x"])
+        assert r.select(x, explore=False) == r2.select(x, explore=False)
+    assert r2.expected_cost("debate") == r.expected_cost("debate")

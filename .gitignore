@@ -5,3 +5,5 @@ __pycache__/
 results/*.jsonl
 results/*.csv
 .pytest_cache/
+results/router.json
+results/runs.jsonl
