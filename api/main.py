@@ -48,6 +48,8 @@ class SolveIn(BaseModel):
     trigger: Literal["detector", "oracle", "never"] = "detector"
     attributor: Literal["rule", "llm"] = "rule"
     allow_switch: bool = True
+    verify: bool = False                       # independent verifier re-solve (extra cost)
+    min_agreement: float = Field(1.0, gt=0, le=1)  # debate: required agreement share (0.66 = accept 2-of-3)
     max_repairs: int = Field(2, ge=0, le=5)
     faults: list[FaultIn] = []
     seed: int = 0
@@ -84,7 +86,8 @@ def solve(req: SolveIn):
     orch = Orchestrator(
         router=router, default_arch=req.architecture or "single",
         attributor=LLMAttributor(llm) if req.attributor == "llm" else RuleAttributor(),
-        policy=RepairPolicy(req.allow_switch), max_repairs=req.max_repairs, trigger=req.trigger)
+        policy=RepairPolicy(req.allow_switch), max_repairs=req.max_repairs, trigger=req.trigger,
+        verify=req.verify, min_agreement=req.min_agreement)
     res = orch.run(task, budget=req.budget, faults=[FaultSpec(**f.model_dump(), seed=req.seed) for f in req.faults],
                    seed=req.seed, llm=llm)
     out = res.to_dict()

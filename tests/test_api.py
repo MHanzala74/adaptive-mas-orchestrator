@@ -36,3 +36,9 @@ def test_save_router_and_run_log(tmp_path, monkeypatch):
     c.post("/solve", json={"question": "2 + 2", "answer": "4"})
     r = c.get("/runs").json()
     assert r["n"] == 1 and r["runs"][0]["tokens"] > 0
+
+def test_solve_accepts_verify_and_margin():
+    r = c.post("/solve", json={"question": "(3 + 4) * 5", "answer": "35", "architecture": "single", "use_router": False,
+                               "verify": True, "min_agreement": 0.66, "faults": [{"agent": "solo", "kind": "wrong"}]})
+    assert r.status_code == 200 and r.json()["attempts"] >= 1
+    assert c.post("/solve", json={"question": "1+1", "min_agreement": 0}).status_code == 422
