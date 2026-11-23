@@ -71,3 +71,27 @@ def test_parse_answer_is_robust():
     assert parse_answer("ANSWER: 7 dollars\nANSWER: 8") == "8"
     assert parse_answer("ANSWER: 5.0") == "5"
     assert parse_answer("no answer here") is None
+
+def test_get_llm_real_backend_is_wrapped_cached_and_limited(tmp_path, monkeypatch):
+    import mas.llm as L
+    import mas.llm_wrappers as W
+    calls = {"n": 0}
+
+    class FakeAnthropic(BaseLLM):
+        model = "fake"
+        def complete(self, system, prompt, temperature=0.7):
+            calls["n"] += 1
+            return LLMResponse(f"ANSWER: {calls['n']}", 10, 5)
+
+    monkeypatch.setattr(L, "AnthropicLLM", FakeAnthropic)
+    monkeypatch.setenv("LLM_BACKEND", "anthropic")
+    monkeypatch.setenv("LLM_CACHE_PATH", str(tmp_path / "c.sqlite"))
+    monkeypatch.setattr(W, "GUARD", W.SpendGuard(max_calls=3))
+    monkeypatch.setattr(W.LimitedLLM, "__init__", lambda self, inner, guard=None: (setattr(self, "inner", inner), setattr(self, "guard", W.GUARD)) and None)
+    llm = L.get_llm(seed=4)
+    a = llm.complete("s", "p"); llm2 = L.get_llm(seed=4)
+    assert llm2.complete("s", "p").text == a.text and calls["n"] == 1        # replayed from cache, no new real call
+    llm.complete("s", "q"); llm.complete("s", "r")                            # 3 real calls total
+    with pytest.raises(SpendLimitExceeded):
+        llm.complete("s", "new prompt")                                      # 4th real call blocked by the limit
+    assert calls["n"] == 3

@@ -15,10 +15,10 @@ A multi-agent system that **chooses its own agent architecture per task, detects
 ## Quick start
 ```bash
 pip install -r requirements.txt
-python -m pytest -q                  # 50 tests, offline
+python -m pytest -q                  # 68 tests, offline
 uvicorn api.main:app --reload        # API docs at http://127.0.0.1:8000/docs
 ```
-Real models: set `LLM_BACKEND=anthropic` or `openai` plus the API key in your environment (never commit keys), and start with a small run.
+Real models: set `LLM_BACKEND=anthropic` or `openai` plus the API key in your environment (never commit keys). Calls are retried, cached (crashed runs resume for free) and capped by `MAX_API_TOKENS`. The first real experiment, measuring a model's error correlation, is a copy-paste protocol in [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md#71-protocol-for-the-first-real-model-run-about-160k-tokens).
 
 ## Documentation
 **Full documentation: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md)**: components, API reference, configuration, experiments, results and limitations.

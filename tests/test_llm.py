@@ -28,3 +28,14 @@ def test_openai_backend_with_fake_client():
         choices=[NS(message=NS(content="ANSWER: 7"))], usage=NS(prompt_tokens=11, completion_tokens=3)))))
     r = OpenAILLM(model="x", client=fake).complete("s", "p")
     assert (r.text, r.input_tokens, r.output_tokens) == ("ANSWER: 7", 11, 3)
+
+def test_openai_temperature_can_be_omitted(monkeypatch):
+    from types import SimpleNamespace as NS
+    from mas.llm import OpenAILLM
+    seen = {}
+    def create(**kw):
+        seen.update(kw); return NS(choices=[NS(message=NS(content="ANSWER: 1"))], usage=NS(prompt_tokens=1, completion_tokens=1))
+    llm = OpenAILLM(model="x", client=NS(chat=NS(completions=NS(create=create))))
+    llm.complete("s", "p", 0.8); assert seen["temperature"] == 0.8
+    monkeypatch.setenv("OPENAI_NO_TEMPERATURE", "1")
+    seen.clear(); llm.complete("s", "p", 0.8); assert "temperature" not in seen

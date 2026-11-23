@@ -183,9 +183,10 @@ class OpenAILLM(BaseLLM):
         self.model = model or os.getenv("MODEL_NAME", "gpt-4o-mini")  # check current model names
 
     def complete(self, system: str, prompt: str, temperature: float = 0.7) -> LLMResponse:
+        kw = {} if os.getenv("OPENAI_NO_TEMPERATURE") == "1" else {"temperature": temperature}   # some models reject it
         r = self.client.chat.completions.create(
-            model=self.model, temperature=temperature, max_completion_tokens=600,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+            model=self.model, max_completion_tokens=600,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}], **kw,
         )
         return LLMResponse(r.choices[0].message.content or "", r.usage.prompt_tokens, r.usage.completion_tokens)
 

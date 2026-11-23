@@ -40,6 +40,8 @@ This document describes what the project contains, how each part works, how to r
 | Statistics | Bootstrap confidence intervals and paired bootstrap differences |
 | Service | FastAPI app with router training, solving, fault sweeps and run logs |
 | Backends | Mock (offline, default), Anthropic, OpenAI |
+| Real-model safety | Retry with backoff, hard spend limit, on-disk replay cache (resume), server-side budget cap, optional API key |
+| Calibration | Measures a model's error correlation and maps it onto the simulator's `MOCK_CORR` knob |
 
 ---
 
@@ -160,7 +162,18 @@ Classifies each wrong answer: `budget_exceeded`, `degenerate_output`, `no_answer
 ### 4.11 Run log (`mas/runlog.py`)
 Append-only JSONL of every `/solve` call with answer, tokens, attempts, full trace and repair history.
 
-### 4.12 Statistics (`mas/stats.py`)
+### 4.12 Real-model safety layer (`mas/llm_wrappers.py`)
+Real backends returned by `get_llm()` are wrapped as `CachedLLM -> LimitedLLM -> RetryingLLM -> backend`; the mock is never wrapped.
+- **Retry:** exponential backoff with jitter on rate limits, timeouts, connection errors and 5xx/529 responses. Auth and bad-request errors (400, 401, 403, 404) are never retried.
+- **Spend limit:** a process-wide `SpendGuard` counts only real (non-cached) usage and raises `SpendLimitExceeded` *before* a call that would pass `MAX_API_TOKENS` or `MAX_API_CALLS`. With `PRICE_IN_PER_M` / `PRICE_OUT_PER_M` it also reports an approximate dollar cost.
+- **Replay cache (SQLite):** the key includes the model, prompts, temperature, the **run seed** and an **occurrence counter**. Repeated identical sampling calls inside one run therefore get different stored samples (self-consistency stays meaningful), while re-running the same seed replays them exactly. Re-running a crashed script is free for everything already finished.
+- **API server:** `MAX_BUDGET_PER_REQUEST` (default 4000 tokens on real backends) is applied as default and ceiling to every `/solve`; setting `API_KEY` requires an `X-API-Key` header on every endpoint except `/health`.
+- Answer parsing tolerates `$`, thousands separators, bold markers and units, and takes the last `ANSWER:` line.
+
+### 4.13 Calibration (`mas/calibration.py`)
+The statistic is the **shared-wrong rate**: among pairs of wrong samples drawn for the same task, the fraction giving the same wrong answer (near 0 for independent noise, high for a shared misconception), with a cluster-bootstrap CI over tasks. `fit_mock_corr` finds the `MOCK_CORR` value whose simulated rate matches a measured one (recovered 0.5 as 0.55 in a self-test). The mapping is approximate because real wrong answers are not uniform synthetic noise.
+
+### 4.14 Statistics (`mas/stats.py`)
 `bootstrap_ci` and `paired_diff_ci` (2000 resamples, 95% by default). Passing `clusters=` (for example task ids) resamples whole clusters, which is required because several seeds and methods run the same task and are therefore not independent. A difference is called significant only if its interval excludes zero.
 
 ---
@@ -204,6 +217,12 @@ Note: with the mock backend, `question` must be an arithmetic expression. With a
 | `MOCK_HETERO` | `1` selects the heterogeneous mock scenario |
 | `MOCK_CORR` | Probability in [0, 1] that wrong answers are shared across samples (mock only) |
 | `RUN_LOG`, `RUN_LOG_ENABLED` | Run-log path and on/off switch |
+| `MAX_API_TOKENS`, `MAX_API_CALLS` | Hard caps on real API usage for the whole process |
+| `PRICE_IN_PER_M`, `PRICE_OUT_PER_M` | USD per million input/output tokens, for cost estimates only |
+| `LLM_CACHE`, `LLM_CACHE_PATH` | `0` disables the replay cache; default path `results/cache/llm_cache.sqlite` |
+| `OPENAI_NO_TEMPERATURE` | `1` omits `temperature` for models that reject it |
+| `MAX_BUDGET_PER_REQUEST` | Per-request token ceiling for `/solve` on real backends (default 4000) |
+| `API_KEY` | If set, endpoints (except `/health`) require header `X-API-Key` |
 
 Never commit keys. `.env` is git-ignored; `.env.example` shows the format.
 
@@ -218,6 +237,7 @@ Never commit keys. `.env` is git-ignored; `.env.example` shows the format.
 | `experiments/taxonomy.py` | `results/taxonomy.md`, `docs/fig_taxonomy.*` | Failure causes by architecture and fault |
 | `experiments/baselines.py` | `results/baselines.md` | Equal-budget comparison against self-consistency, adaptive SC and cascade in three environments |
 | `experiments/pareto.py` | `results/pareto.md`, `docs/fig_pareto.*` | Accuracy-vs-cost frontier and hard-budget sweep |
+| `experiments/real_error_correlation.py` | `results/real_error_correlation.md` | **The key real-model experiment**: error correlation of one model, plus calibrated `MOCK_CORR` |
 | `docs/make_figure.py` | `docs/fig_architecture.*` | Regenerates Figure 1 |
 
 ```bash
@@ -230,6 +250,27 @@ python experiments/taxonomy.py
 python experiments/baselines.py      # about 5 s
 python experiments/pareto.py         # about 20 s
 ```
+
+### 7.1 Protocol for the first real-model run (about 160k tokens)
+
+```bash
+# 1. data (MIT-licensed GSM8K test set, 1319 problems)
+mkdir -p data && curl -L -o data/gsm8k_test.jsonl \
+  https://raw.githubusercontent.com/openai/grade-school-math/master/grade_school_math/data/test.jsonl
+
+# 2. credentials and hard limits (environment only; never commit keys)
+export LLM_BACKEND=anthropic ANTHROPIC_API_KEY=...        # or: LLM_BACKEND=openai OPENAI_API_KEY=... OPENAI_NO_TEMPERATURE=1 if rejected
+export MODEL_NAME=<a small current model>
+export MAX_API_TOKENS=300000 PRICE_IN_PER_M=<usd> PRICE_OUT_PER_M=<usd>
+
+# 3. estimate, then run
+python experiments/real_error_correlation.py --data data/gsm8k_test.jsonl --n 100 --k 5 --dry-run
+python experiments/real_error_correlation.py --data data/gsm8k_test.jsonl --n 100 --k 5
+
+# 4. feed the measured correlation back into the simulator
+MOCK_CORR=<value printed above> MOCK_HETERO=1 python experiments/baselines.py
+```
+The dry run estimates about 36k input and 125k output tokens for 100 tasks × 5 samples. If the run stops at the spend limit or crashes, simply run the same command again: finished calls replay from the cache for free. Set a spending limit with your provider as well; the local limit protects one process, not your account.
 
 All runs use fixed seeds. To use a real model, set `LLM_BACKEND` and the key, **start with a small run** (for example `--n-train 30 --n-test 30`), and set a spending limit with your provider; debate makes many calls per task.
 
@@ -336,7 +377,9 @@ Row (a): accuracy versus mean tokens with the Pareto frontier. Row (b): accuracy
 ```
 api/main.py                 FastAPI service
 mas/
-  llm.py                    LLM backends, TokenMeter, budget
+  llm.py                    LLM backends, TokenMeter, budget, answer parsing
+  llm_wrappers.py           retry, spend limit, replay cache
+  calibration.py            error-correlation statistic and MOCK_CORR fitting
   core.py                   Context, trace, runtime
   architectures/impl.py     five architectures and registry
   router/                   features, LinUCB, training/evaluation
@@ -350,23 +393,23 @@ mas/
 experiments/                main results, ablation, taxonomy, baselines, Pareto (common.py = shared helpers)
 docs/                       this file, report draft, figures
 results/                    generated result tables
-tests/                      50 tests
+tests/                      68 tests
 ```
 
 ---
 
 ## 11. Testing
 
-`python -m pytest -q` runs 50 tests covering the LLM and budget layer, tasks, architectures, faults (including a regression test for intermittent faults), attribution, router training and persistence, orchestration, taxonomy, statistics and the API. The tests use the mock backend, so they are free and offline. The real-backend code paths (Anthropic, OpenAI) are exercised only through a fake client and have not been run against live APIs.
+`python -m pytest -q` runs 68 tests covering the LLM and budget layer, tasks, architectures, faults (including a regression test for intermittent faults), attribution, router training and persistence, orchestration, taxonomy, statistics and the API. The tests use the mock backend, so they are free and offline. The real-backend code paths (Anthropic, OpenAI) are exercised only through a fake client and have not been run against live APIs.
 
 ---
 
 ## 12. Roadmap
 
-Done in the latest iteration: cluster bootstrap, figure/code consistency, self-consistency, adaptive-SC and cascade baselines, three-environment sensitivity, accuracy-cost frontier and budget sweep.
+Done so far: cluster bootstrap, figure/code consistency, self-consistency, adaptive-SC and cascade baselines, three-environment sensitivity, accuracy-cost frontier and budget sweep, retry/limit/cache safety layer, server-side budget cap and API key, robust answer parsing, error-correlation measurement and calibration.
 
-1. Run the main experiments with a real model on GSM8K, HumanEval and HotpotQA, and update Section 8 with real data (add response caching, retries and resume first so a crash does not waste API spend).
-2. **Measure real error correlation** (how often several samples of one model give the same wrong answer). This single number predicts whether debate or self-consistency should win (Section 8.6).
+1. **Run `experiments/real_error_correlation.py` on a real model** (protocol in 7.1; caching, retries, spend limit and resume are now in place). This single measurement predicts whether debate or self-consistency should win (Section 8.6) and calibrates the simulator.
+2. Then run the main comparisons with a real model on GSM8K, HumanEval and HotpotQA, and replace the simulated numbers in Section 8 with real data.
 3. Evaluate router transfer: train under one error model, deploy under another.
 4. Replace the same-model verifier with a different or cheaper one and measure false-alarm cost.
 5. Test shared-role failures and multi-fault scenarios; evaluate the LLM attributor on real traces against hand labels.
