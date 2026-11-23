@@ -7,8 +7,9 @@ from mas.attribution import Attribution
 from mas.core import RunResult
 
 # agents that can be dropped without the architecture becoming meaningless
-BYPASSABLE = {"debater_0", "debater_1", "debater_2", "planner", "critic", "judge"}
-ESCALATE = {"single": "debate", "planner_worker": "debate", "debate": "planner_worker", "solver_critic": "debate", "debate_judge": "planner_worker"}
+BYPASSABLE = {"debater_0", "debater_1", "debater_2", "planner", "critic", "judge"} | {f"sampler_{i}" for i in range(8)} | {"cascade_0", "cascade_1"}
+ESCALATE = {"single": "debate", "planner_worker": "debate", "debate": "planner_worker", "solver_critic": "debate", "debate_judge": "planner_worker",
+            "sc3": "debate", "sc5": "debate", "sc7": "planner_worker", "adaptive_sc": "debate", "cascade": "planner_worker"}
 
 
 @dataclass

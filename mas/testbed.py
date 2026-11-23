@@ -18,7 +18,8 @@ def run_once(task, arch: str, *, llm: BaseLLM | None = None, seed: int = 0,
 
 
 def default_scenarios(arch: str) -> dict[str, list[FaultSpec]]:
-    victim = {"single": "solo", "debate": "debater_0", "planner_worker": "worker", "solver_critic": "solver", "debate_judge": "debater_0"}[arch]
+    victim = {"single": "solo", "debate": "debater_0", "planner_worker": "worker", "solver_critic": "solver", "debate_judge": "debater_0",
+              "sc3": "sampler_0", "sc5": "sampler_0", "sc7": "sampler_0", "adaptive_sc": "sampler_0", "cascade": "cascade_0"}[arch]
     sc = {"clean": []}
     for kind in ("wrong", "malicious", "loop", "silent"):
         sc[kind] = [FaultSpec(victim, kind)]

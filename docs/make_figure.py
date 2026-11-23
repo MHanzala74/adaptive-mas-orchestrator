@@ -76,7 +76,7 @@ lab(36.5, 24.2, "overrides /\nnew topology", 7.5)
 ax.plot([92, 92], [43, 66], color=G, lw=1.0, ls="--")
 ax.plot([92, 29.5], [66, 66], color=G, lw=1.0, ls="--")
 arrow((29.5, 66), (29.5, 43), ls="--", color=G)
-lab(60.5, 67.3, "router update: $r=\\mathbb{1}[\\hat y=y]-\\lambda\\,\\mathrm{tokens}/300$", 8)
+lab(60.5, 67.3, "offline router training from logged outcomes: $r=\\mathbb{1}[\\hat y=y]-\\lambda\\,\\mathrm{tokens}/300$", 8)
 
 # ---- shared budget bar
 box(1, 1.2, 98, 3.4, "All calls (initial run, verifier, attribution, retries) draw on one shared token budget $B$", fs=8.5, fc="0.9")
@@ -85,9 +85,9 @@ for x in (91.5, 67.5, 39.5):
 
 # ---- embedded caption (paper style)
 cap = ("$\\bf{Figure\\ 1.}$ Overview of the adaptive multi-agent orchestrator. A router maps a task $q$ and token budget $B$ to one of five architectures\n"
-       "(a)\u2013(e). The answer $\\hat y$ and execution trace $\\tau$ are checked by a failure detector; on failure, attribution identifies the culprit agent and\n"
-       "step, and the repair policy reprompts, replaces or bypasses it, or switches topology. Dashed elements: fault injector (evaluation only),\n"
-       "router-update feedback, and the judge (called only when the vote has no majority). All model calls share one token budget.")
+       "(a)\u2013(e). The answer $\\hat y$ and execution trace $\\tau$ are checked by a failure detector; on failure, attribution identifies the culprit agent and step,\n"
+       "and the repair policy reprompts, replaces or bypasses it, or switches topology. Dashed elements: fault injector (evaluation only), the offline\n"
+       "router-training signal (no inference-time update), and the judge (called only on split votes). All calls share one token budget $B$.")
 fig.text(0.015, 0.108, cap, ha="left", va="top", fontsize=9, linespacing=1.4)
 fig.savefig("docs/fig_architecture.png", dpi=300, bbox_inches="tight", facecolor="white")
 fig.savefig("docs/fig_architecture.pdf", bbox_inches="tight", facecolor="white")

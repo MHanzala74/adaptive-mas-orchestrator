@@ -48,3 +48,26 @@ def test_debate_judge_only_calls_judge_on_split_and_helps():
     assert 0 < sum(called) < len(ts) // 2
     assert sum(r.correct for r in rj) >= sum(r.correct for r in rd)
     assert sum(r.tokens for r in rj) < 1.3 * sum(r.tokens for r in rd)
+
+def test_baselines_costs_and_budget_match():
+    from mas.architectures.impl import BASELINES
+    ts = generate_synthetic(60, seed=12)
+    tok = {a: sum(run(a, t, seed=i).tokens for i, t in enumerate(ts)) / len(ts) for a in ["single", "sc3", "sc7", "adaptive_sc", "cascade", "debate"]}
+    assert 2.5 * tok["single"] < tok["sc3"] < 3.5 * tok["single"]
+    assert abs(tok["sc7"] - tok["debate"]) / tok["debate"] < 0.15        # sc7 ~ debate budget
+    assert tok["adaptive_sc"] < tok["sc7"] and tok["single"] < tok["cascade"] < tok["debate"] * 1.3
+    assert set(BASELINES) == {"sc3", "sc5", "sc7", "adaptive_sc", "cascade"}
+
+def test_adaptive_sc_stops_early_and_bypass_works():
+    t = generate_synthetic(1)[0]
+    r = run("adaptive_sc", t)
+    assert 2 <= r.calls <= 7
+    b = run("sc5", t, overrides={"sampler_0": {"action": "bypass"}})
+    assert "sampler_0" not in [s.agent for s in b.trace]
+
+def test_mock_correlated_errors_share_wrong_answer(monkeypatch):
+    monkeypatch.setenv("MOCK_CORR", "1.0")
+    from mas.llm import MockLLM
+    llm = MockLLM(seed=0, base_acc=0.0)
+    outs = {llm.complete("s", "QUESTION: 6*7\nDIFFICULTY: 1").text for _ in range(8)}
+    assert len(outs) == 1                                                  # always the same wrong answer

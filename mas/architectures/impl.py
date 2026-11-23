@@ -96,6 +96,53 @@ class SolverCritic(Architecture):
         return parse_answer(ctx.ask("solver", SOLVER, prompt, 0.3)) or a1
 
 
+# ---------------- baselines (comparison methods; not part of the router's core pool) ----------------
+class SelfConsistency(Architecture):
+    """k independent samples from one solver, plurality vote (equal-budget baseline for debate)."""
+
+    def __init__(self, k: int = 5):
+        self.k = k
+        self.name = f"sc{k}"
+        self.agents = [f"sampler_{i}" for i in range(k)]
+
+    def solve(self, task, ctx: Context):
+        active = [a for a in self.agents if not ctx.bypassed(a)] or self.agents[:1]
+        return majority([parse_answer(ctx.ask(a, SOLVER, _q(task), 0.8)) for a in active])
+
+
+class AdaptiveSC(Architecture):
+    """Sample sequentially and stop as soon as two samples agree (early-stopping self-consistency)."""
+    name = "adaptive_sc"
+
+    def __init__(self, kmax: int = 7):
+        self.kmax = kmax
+        self.agents = [f"sampler_{i}" for i in range(kmax)]
+
+    def solve(self, task, ctx: Context):
+        got: list[str | None] = []
+        for a in self.agents:
+            if ctx.bypassed(a):
+                continue
+            got.append(parse_answer(ctx.ask(a, SOLVER, _q(task), 0.8)))
+            vals = [g for g in got if g is not None]
+            if vals and max(vals.count(v) for v in vals) >= 2:
+                break
+        return majority(got)
+
+
+class Cascade(Architecture):
+    """Cheap first: two samples; if they agree accept, otherwise escalate to a full debate."""
+    name = "cascade"
+    agents = ["cascade_0", "cascade_1", "debater_0", "debater_1", "debater_2"]
+
+    def solve(self, task, ctx: Context):
+        a = parse_answer(ctx.ask("cascade_0", SOLVER, _q(task), 0.8))
+        b = parse_answer(ctx.ask("cascade_1", SOLVER, _q(task), 0.8))
+        if a is not None and a == b:
+            return a
+        return Debate().solve(task, ctx)
+
+
 REGISTRY = {
     "single": SingleAgent,
     "debate": Debate,
@@ -105,5 +152,17 @@ REGISTRY = {
 }
 
 
+BASELINES = {
+    "sc3": lambda: SelfConsistency(3),
+    "sc5": lambda: SelfConsistency(5),
+    "sc7": lambda: SelfConsistency(7),      # ~ same token budget as debate
+    "adaptive_sc": AdaptiveSC,
+    "cascade": Cascade,
+}
+ALL_NAMES = list(REGISTRY) + list(BASELINES)
+
+
 def make(name: str) -> Architecture:
-    return REGISTRY[name]()
+    if name in REGISTRY:
+        return REGISTRY[name]()
+    return BASELINES[name]()

@@ -99,6 +99,9 @@ class MockLLM(BaseLLM):
     seed: int = 0
     # hetero=True: debate helps mostly on HARD tasks (sensitivity scenario, env MOCK_HETERO=1)
     hetero: bool = field(default_factory=lambda: os.getenv("MOCK_HETERO") == "1")
+    # error_corr: probability that a wrong answer is the task's shared "attractor" wrong answer
+    # (models a common misconception) instead of independent noise (env MOCK_CORR, default 0)
+    error_corr: float = field(default_factory=lambda: float(os.getenv("MOCK_CORR", "0") or 0))
     _n: int = field(default=0, init=False)
 
     def _rand(self, key: str) -> float:
@@ -131,6 +134,8 @@ class MockLLM(BaseLLM):
             p = min(0.99, max(0.02, p))
             if self._rand(expr) < p:
                 ans = truth
+            elif self.error_corr > 0 and self._rand(expr + "c") < self.error_corr:
+                ans = truth + 1 + int(hashlib.sha256(expr.encode()).hexdigest()[:6], 16) % 9   # shared wrong answer
             else:
                 ans = truth + int(self._rand(expr + "x") * 20) - 10 or truth + 1
             text = f"Reasoning: evaluate step by step.\nANSWER: {ans:g}"

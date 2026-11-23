@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from mas.architectures.impl import REGISTRY
+from mas.architectures.impl import ALL_NAMES, BASELINES, REGISTRY
 from mas.attribution import LLMAttributor, RuleAttributor
 from mas.benchmarks.tasks import Task, check, generate_synthetic, split
 from mas.faults import FAULT_KINDS, FaultSpec
@@ -73,12 +73,12 @@ def health():
 
 @app.get("/architectures")
 def architectures():
-    return {"architectures": ARCHS, "fault_kinds": list(FAULT_KINDS)}
+    return {"architectures": ARCHS, "baselines": list(BASELINES), "fault_kinds": list(FAULT_KINDS)}
 
 
 @app.post("/solve")
 def solve(req: SolveIn):
-    if req.architecture and req.architecture not in REGISTRY:
+    if req.architecture and req.architecture not in ALL_NAMES:
         raise HTTPException(422, f"unknown architecture {req.architecture}")
     task = Task("api", req.question, req.answer or "", req.difficulty)
     llm = get_llm(req.seed)
