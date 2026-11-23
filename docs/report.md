@@ -16,10 +16,10 @@ Multi-agent LLM systems are usually fixed pipelines. Prior work reports that the
 - **Failure signals:** degenerate output, missing answer, debate disagreement, budget overrun, optional independent verifier.
 
 ## 3. Experimental protocol
-3 seeds x 100-200 tasks per cell; 95% bootstrap CIs over (task, seed); paired bootstrap for differences. Router trained on disjoint tasks. Oracle policies are reported only as upper bounds. Code: `experiments/main_results.py`, `experiments/ablation.py`.
+3 seeds x 100-200 tasks per cell; 95% cluster-bootstrap CIs (cluster = task, since seeds of one task are not independent); paired cluster bootstrap for differences. Router trained on disjoint tasks. Oracle policies are reported only as upper bounds. Code: `experiments/main_results.py`, `experiments/ablation.py`.
 
 ## 4. Results
-**4.1 Routing.** With homogeneous architecture gains, the learned router reduces to the best fixed policy (reward -0.002 [-0.003,-0.001]). With heterogeneous gains (debate helps mainly on hard tasks) the full-information router beats the best fixed policy by +0.040 [0.018, 0.062] reward at 187 vs 255 tokens. A bandit trained from partial feedback (3 epochs, 200 tasks) did not (0.000), and under a 150-token hard budget no router gain appeared because the feasible set collapses.
+**4.1 Routing.** With homogeneous architecture gains, the learned router reduces to the best fixed policy (reward difference -0.002 [-0.004, 0.000], not significant). With heterogeneous gains (debate helps mainly on hard tasks) the full-information router beats the best fixed policy by +0.040 [0.015, 0.065] reward at 187 vs 255 tokens. A bandit trained from partial feedback (3 epochs, 200 tasks) did not (0.000), and under a 150-token hard budget no router gain appeared because the feasible set collapses.
 
 **4.2 Attribution.** Zero-token attribution is perfect on loop/silent faults. For debate with wrong/malicious faults, agent-level accuracy is 0.54 (final round), 0.41 (round 1), 0.68 (disagreement across all rounds): healthy debaters converge to a faulty peer in later rounds, erasing the outlier signal.
 

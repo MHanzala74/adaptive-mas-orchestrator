@@ -26,6 +26,10 @@ def per_item(choose, log, lam):
     return np.array(rows)
 
 
+def ids(log):
+    return [rec["task_id"] for rec in log]   # cluster = task (seeds of one task are not independent)
+
+
 def run(n_train, n_test, lam, budget, seeds):
     train = generate_synthetic(n_train, seed=1)
     test = generate_synthetic(n_test, seed=100)
@@ -40,13 +44,14 @@ def run(n_train, n_test, lam, budget, seeds):
         pols["router (bandit)"] = lambda rec: bandit.select(np.array(rec["x"]), b, explore=False)
         pols["oracle"] = oracle_choice(lam)
         res = {n: per_item(c, log_te, lam) for n, c in pols.items()}
+        cl = ids(log_te)
         best_fixed = max(ARCHS, key=lambda a: res[a][:, 2].mean())
         lines = [f"### {bname}  (lam={lam}, {len(seeds)} seeds x {n_test} tasks)", "",
                  "| method | accuracy [95% CI] | tokens/task | reward [95% CI] |", "|---|---|---|---|"]
         for n, r in res.items():
-            lines.append(f"| {n} | {fmt(bootstrap_ci(r[:, 0]))} | {r[:, 1].mean():.0f} | {fmt(bootstrap_ci(r[:, 2]))} |")
+            lines.append(f"| {n} | {fmt(bootstrap_ci(r[:, 0], clusters=cl))} | {r[:, 1].mean():.0f} | {fmt(bootstrap_ci(r[:, 2], clusters=cl))} |")
         for n in ("router (full-info)", "router (bandit)"):
-            d = paired_diff_ci(res[n][:, 2], res[best_fixed][:, 2])
+            d = paired_diff_ci(res[n][:, 2], res[best_fixed][:, 2], clusters=cl)
             lines.append(f"\n{n} - best fixed ({best_fixed}) reward: {fmt(d)}"
                          f" -> {'significant' if d[1] > 0 or d[2] < 0 else 'not significant'}")
         out.append("\n".join(lines))

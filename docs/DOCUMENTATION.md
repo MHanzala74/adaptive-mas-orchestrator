@@ -149,7 +149,7 @@ Classifies each wrong answer: `budget_exceeded`, `degenerate_output`, `no_answer
 Append-only JSONL of every `/solve` call with answer, tokens, attempts, full trace and repair history.
 
 ### 4.12 Statistics (`mas/stats.py`)
-`bootstrap_ci` and `paired_diff_ci` (2000 resamples, 95% by default). A difference is called significant only if its interval excludes zero.
+`bootstrap_ci` and `paired_diff_ci` (2000 resamples, 95% by default). Passing `clusters=` (for example task ids) resamples whole clusters, which is required because several seeds and methods run the same task and are therefore not independent. A difference is called significant only if its interval excludes zero.
 
 ---
 
@@ -220,15 +220,17 @@ All runs use fixed seeds. To use a real model, set `LLM_BACKEND` and the key, **
 
 ## 8. Results
 
-Protocol: three seeds, 100 to 200 tasks per cell, 95% bootstrap confidence intervals over (task, seed), paired bootstrap for differences, router trained on disjoint tasks. Full tables are in `results/`.
+Protocol: three seeds, 100 to 200 tasks per cell, 95% cluster-bootstrap confidence intervals (cluster = task), paired cluster bootstrap for differences, router trained on disjoint tasks. Full tables are in `results/`.
 
 ### 8.1 Routing (3 seeds × 200 test tasks, reward = correct − 0.3 · tokens/300)
 
 | Environment | Setting | Full-information router vs best fixed | Bandit router vs best fixed |
 |---|---|---|---|
-| Homogeneous (equal gains at all difficulties) | unconstrained | −0.002 [−0.003, −0.001] | −0.021 [−0.064, 0.021], n.s. |
-| Heterogeneous (debate helps on hard tasks) | unconstrained | **+0.040 [0.018, 0.062]** | 0.000, n.s. |
-| Heterogeneous | 150-token hard budget | 0.000, n.s. | −0.032 [−0.083, 0.017], n.s. |
+| Homogeneous (equal gains at all difficulties) | unconstrained | −0.002 [−0.004, 0.000], n.s. | −0.021 [−0.065, 0.021], n.s. |
+| Heterogeneous (debate helps on hard tasks) | unconstrained | **+0.040 [0.015, 0.065]** | 0.000, n.s. |
+| Heterogeneous | 150-token hard budget | 0.000, n.s. | −0.032 [−0.081, 0.021], n.s. |
+
+All intervals are **cluster bootstrap over tasks** (see 4.12). An earlier version used an iid bootstrap that treated repeated runs of the same task as independent; correcting this widened intervals by roughly 15% and turned the homogeneous-environment result from a tiny "significant loss" into "not significant".
 
 Reading: a router can only win when architectures differ in where they help. When they do, the full-information router wins at lower cost than always-debate (187 vs 255 tokens). Learning from partial feedback did not recover this with the data used. Under a tight budget the feasible set collapses. The oracle is not a realistic ceiling because it picks using realised noise.
 

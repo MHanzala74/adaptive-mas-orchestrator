@@ -40,13 +40,13 @@ def main(n, seeds):
         for kind, p in SCENARIOS:
             cells = []
             for name, mk in CONFIGS.items():
-                orch, c, tk = mk(arch), [], []
+                orch, c, tk, cl = mk(arch), [], [], []
                 for sd in seeds:
                     f = [] if kind == "clean" else [FaultSpec(VICTIM[arch], kind, p, seed=sd)]
                     for i, t in enumerate(tasks):
                         r = orch.run(t, faults=f, seed=sd * 7919 + i)
-                        c.append(int(r.correct)); tk.append(r.tokens)
-                m, lo, hi = bootstrap_ci(c)
+                        c.append(int(r.correct)); tk.append(r.tokens); cl.append(i)
+                m, lo, hi = bootstrap_ci(c, clusters=cl)   # cluster = task index
                 cells.append(f"{m:.2f}±{(hi - lo) / 2:.2f} / {sum(tk) / len(tk):.0f}")
             lines.append(f"| {arch} | {kind}@{p} | " + " | ".join(cells) + " |")
     md = "\n".join(lines) + "\n"
