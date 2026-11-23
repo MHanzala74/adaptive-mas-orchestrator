@@ -191,14 +191,19 @@ class OpenAILLM(BaseLLM):
 
 
 def get_llm(seed: int = 0) -> BaseLLM:
+    """Mock by default. Real backends are wrapped with retry, a hard spend limit and a replay cache."""
     backend = os.getenv("LLM_BACKEND", "mock")
-    if backend == "anthropic":
-        return AnthropicLLM()
-    if backend == "openai":
-        return OpenAILLM()
+    if backend in ("anthropic", "openai"):
+        from mas.llm_wrappers import wrap
+        base = AnthropicLLM() if backend == "anthropic" else OpenAILLM()
+        return wrap(base, f"{backend}:{base.model}", seed)
     return MockLLM(seed=seed)
 
 
 def parse_answer(text: str) -> str | None:
-    m = re.search(r"ANSWER:\s*(-?[\d.,]+)", text)
-    return m.group(1).replace(",", "").rstrip(".") if m else None
+    """Last 'ANSWER: <number>' in the text; tolerates $, **bold**, units and thousands separators."""
+    ms = re.findall(r"ANSWER:\**\s*\$?\s*(-?\d[\d,]*(?:\.\d+)?)", text)
+    if not ms:
+        return None
+    num = ms[-1].replace(",", "")
+    return num[:-2] if num.endswith(".0") else num
