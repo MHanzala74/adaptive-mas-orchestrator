@@ -42,3 +42,23 @@ def test_solve_accepts_verify_and_margin():
                                "verify": True, "min_agreement": 0.66, "faults": [{"agent": "solo", "kind": "wrong"}]})
     assert r.status_code == 200 and r.json()["attempts"] >= 1
     assert c.post("/solve", json={"question": "1+1", "min_agreement": 0}).status_code == 422
+
+def test_effective_budget_caps_real_backend(monkeypatch):
+    from api.main import effective_budget
+    monkeypatch.delenv("MAX_BUDGET_PER_REQUEST", raising=False)
+    monkeypatch.setenv("LLM_BACKEND", "mock")
+    assert effective_budget(None) is None and effective_budget(500) == 500          # mock: uncapped
+    monkeypatch.setenv("LLM_BACKEND", "openai")
+    assert effective_budget(None) == 4000 and effective_budget(99999) == 4000 and effective_budget(500) == 500
+    monkeypatch.setenv("MAX_BUDGET_PER_REQUEST", "800")
+    assert effective_budget(None) == 800
+
+def test_api_key_protects_endpoints_but_not_health(monkeypatch):
+    monkeypatch.setenv("API_KEY", "secret")
+    assert c.get("/health").status_code == 200
+    assert c.post("/solve", json={"question": "1+1"}).status_code == 401
+    assert c.get("/runs").status_code == 401
+    ok = c.post("/solve", json={"question": "1+1", "answer": "2"}, headers={"x-api-key": "secret"})
+    assert ok.status_code == 200
+    monkeypatch.delenv("API_KEY")
+    assert c.post("/solve", json={"question": "1+1"}).status_code == 200

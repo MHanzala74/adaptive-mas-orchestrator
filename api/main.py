@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from mas.architectures.impl import ALL_NAMES, BASELINES, REGISTRY
@@ -18,6 +18,22 @@ from mas.router.train import collect_log, fit_full_info
 from mas.runlog import append_run, read_runs
 from mas.testbed import fault_sweep
 import os
+
+def require_key(x_api_key: str | None = Header(default=None)):
+    """If API_KEY is set in the environment, every protected endpoint needs a matching X-API-Key header."""
+    expected = os.getenv("API_KEY")
+    if expected and x_api_key != expected:
+        raise HTTPException(401, "missing or invalid X-API-Key")
+
+
+def effective_budget(requested: int | None) -> int | None:
+    """Server-side cap so a request can never spend unbounded tokens on a real backend.
+    Mock backend: no cap unless the client sets one. Real backend: default and ceiling = MAX_BUDGET_PER_REQUEST."""
+    cap = int(os.getenv("MAX_BUDGET_PER_REQUEST", "4000"))
+    if os.getenv("LLM_BACKEND", "mock") == "mock" and not os.getenv("MAX_BUDGET_PER_REQUEST"):
+        return requested
+    return min(requested, cap) if requested is not None else cap
+
 
 app = FastAPI(title="Adaptive Multi-Agent Orchestrator", version="0.1.0")
 STATE: dict = {"router": None, "router_info": None}
@@ -76,7 +92,7 @@ def architectures():
     return {"architectures": ARCHS, "baselines": list(BASELINES), "fault_kinds": list(FAULT_KINDS)}
 
 
-@app.post("/solve")
+@app.post("/solve", dependencies=[Depends(require_key)])
 def solve(req: SolveIn):
     if req.architecture and req.architecture not in ALL_NAMES:
         raise HTTPException(422, f"unknown architecture {req.architecture}")
@@ -88,7 +104,7 @@ def solve(req: SolveIn):
         attributor=LLMAttributor(llm) if req.attributor == "llm" else RuleAttributor(),
         policy=RepairPolicy(req.allow_switch), max_repairs=req.max_repairs, trigger=req.trigger,
         verify=req.verify, min_agreement=req.min_agreement)
-    res = orch.run(task, budget=req.budget, faults=[FaultSpec(**f.model_dump(), seed=req.seed) for f in req.faults],
+    res = orch.run(task, budget=effective_budget(req.budget), faults=[FaultSpec(**f.model_dump(), seed=req.seed) for f in req.faults],
                    seed=req.seed, llm=llm)
     out = res.to_dict()
     out["correct"] = check(task, res.answer) if req.answer is not None else None
@@ -97,7 +113,7 @@ def solve(req: SolveIn):
     return out
 
 
-@app.post("/router/train")
+@app.post("/router/train", dependencies=[Depends(require_key)])
 def train_router(req: TrainIn):
     tr, _ = split(generate_synthetic(req.n_tasks, req.seed), 1.0, req.seed)
     log = collect_log(tr, ARCHS, seeds=(0,))
@@ -107,7 +123,7 @@ def train_router(req: TrainIn):
     return STATE["router_info"]
 
 
-@app.post("/router/save")
+@app.post("/router/save", dependencies=[Depends(require_key)])
 def save_router():
     if STATE["router"] is None:
         raise HTTPException(409, "no trained router")
@@ -115,7 +131,7 @@ def save_router():
     return {"saved": ROUTER_PATH}
 
 
-@app.get("/runs")
+@app.get("/runs", dependencies=[Depends(require_key)])
 def runs(limit: int = 20):
     rows = read_runs(RUN_LOG)[-max(1, min(limit, 200)):]
     return {"n": len(rows), "runs": [{k: r[k] for k in ("ts", "task_id", "architecture", "answer", "tokens", "attempts", "correct") if k in r}
@@ -127,6 +143,6 @@ def router_status():
     return STATE["router_info"] or {"trained": False}
 
 
-@app.post("/faults/sweep")
+@app.post("/faults/sweep", dependencies=[Depends(require_key)])
 def sweep(req: SweepIn):
     return {"rows": fault_sweep(generate_synthetic(req.n_tasks, req.seed), seed=req.seed)}
