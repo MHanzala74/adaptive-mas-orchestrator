@@ -27,6 +27,8 @@ Multi-agent LLM systems are usually fixed pipelines. Prior work reports that the
 
 **4.4 Negative results.** (i) Repairing debate on mere disagreement lowers accuracy (0.59 -> 0.54) and triples tokens. (ii) Verifier+switch on clean tasks reaches 0.85 @ 227 tokens, roughly parity with plain debate (0.82 @ 255): its gain is test-time compute, not repair. (iii) The bandit router underperforms full-information training.
 
+**4.5 Equal-budget baselines.** Against self-consistency at matched budget the multi-agent advantage is environment-dependent: with independent errors `debate` is 0.082 [0.050, 0.113] *worse* than `sc7`; with correlated errors (shared wrong answers, p = 0.5) it is 0.102 [0.063, 0.142] *better*. A router over a pool that includes the right competitor is best or tied in all three simulated environments, whereas a core-pool router loses 0.085 reward when the pool lacks adaptive self-consistency. Router transfer across error models is untested. Measuring real error correlation is the key next experiment.
+
 ## 5. Limitations
 1. The solver is simulated; architecture-benefit structure was chosen by us (hence two environments). Conclusions about real LLMs require `LLM_BACKEND=anthropic` runs on GSM8K / HumanEval / HotpotQA.
 2. Fault-to-agent binding means a topology switch gives fresh agents by construction; shared-role failures are untested.

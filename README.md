@@ -9,12 +9,13 @@ A multi-agent system that **chooses its own agent architecture per task, detects
 - **Detects** failures at inference time (no answer, degenerate output, low agreement, budget overrun, optional verifier).
 - **Attributes** a failure to a specific agent and step.
 - **Repairs** by reprompting, replacing or bypassing the agent, or switching topology.
-- **Tests itself** with a fault-injection testbed and reports bootstrap confidence intervals.
+- **Tests itself** with a fault-injection testbed and reports cluster-bootstrap confidence intervals.
+- **Compares against equal-budget baselines** (self-consistency, adaptive self-consistency, cascade), where the multi-agent advantage turns out to depend on how correlated model errors are.
 
 ## Quick start
 ```bash
 pip install -r requirements.txt
-python -m pytest -q                  # 45 tests, offline
+python -m pytest -q                  # 50 tests, offline
 uvicorn api.main:app --reload        # API docs at http://127.0.0.1:8000/docs
 ```
 Real models: set `LLM_BACKEND=anthropic` or `openai` plus the API key in your environment (never commit keys), and start with a small run.

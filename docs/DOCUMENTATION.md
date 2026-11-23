@@ -28,7 +28,8 @@ This document describes what the project contains, how each part works, how to r
 
 | Capability | Summary |
 |---|---|
-| Five architectures | single, debate, debate+judge, planner-worker, solver-critic |
+| Five core architectures | single, debate, debate+judge, planner-worker, solver-critic |
+| Baselines | self-consistency (3, 5, 7 samples), adaptive self-consistency, cascade, for equal-budget comparison |
 | Learned router | Budget-aware LinUCB contextual bandit that picks an architecture from observable task features |
 | Fault injection | Four fault kinds (wrong, malicious, loop, silent), persistent or intermittent |
 | Failure detection | Inference-time signals: missing answer, degenerate output, low debate agreement, budget overrun, optional verifier |
@@ -76,7 +77,7 @@ The pipeline has three layers:
 - `BaseLLM.call(meter, system, prompt)` wraps every model call and charges a `TokenMeter`.
 - `TokenMeter(budget)` accumulates input and output tokens and raises `BudgetExceeded` when the budget is passed.
 - Backends:
-  - `MockLLM`: deterministic, offline. It simulates a noisy solver whose accuracy falls with task difficulty and rises when the prompt carries extra signal (peer answers, a plan, a critique). Setting the environment variable `MOCK_HETERO=1` switches to a scenario where debate helps mainly on hard tasks.
+  - `MockLLM`: deterministic, offline. It simulates a noisy solver whose accuracy falls with task difficulty and rises when the prompt carries extra signal (peer answers, a plan, a critique). Setting `MOCK_HETERO=1` switches to a scenario where debate helps mainly on hard tasks. `MOCK_CORR=p` makes a wrong answer equal a shared per-task "attractor" answer with probability `p` (correlated errors, as when many samples fall for the same misconception); the default `0` draws errors independently.
   - `AnthropicLLM` and `OpenAILLM`: real API calls. Keys are read from environment variables only.
 - Token counts for the mock are a word-based estimate; real backends report actual usage.
 
@@ -96,9 +97,19 @@ The pipeline has three layers:
 | `planner_worker` | `planner`, `worker` | Planner writes a plan; worker solves using it | 2 |
 | `solver_critic` | `solver`, `critic` | Solver answers; critic re-solves independently; on mismatch the solver revises with the critique | 2 to 3 |
 
-That is nine solving roles in total. Two further roles exist outside the architectures: the optional **verifier** (an independent re-solve used by the detector) and the **LLM attributor**.
+The five core architectures form the router's pool. That is nine solving roles in total. Two further roles exist outside the architectures: the optional **verifier** (an independent re-solve used by the detector) and the **LLM attributor**.
 
 All architectures share one runtime (`mas/core.py`): the `Context` object records each step, applies per-agent faults and honours repair overrides (`reprompt`, `replace`, `bypass`).
+
+#### Baselines (`BASELINES` in the same file; not part of the router's core pool)
+
+| Name | Flow | Typical tokens (mock) |
+|---|---|---|
+| `sc3`, `sc5`, `sc7` | k independent samples from one solver, plurality vote. `sc7` matches debate's token budget | about 108 / 180 / 252 |
+| `adaptive_sc` | Sample one at a time (up to 7) and stop as soon as two samples agree | about 110 to 130 |
+| `cascade` | Two samples; if they agree accept, otherwise escalate to a full debate | about 225 to 236 |
+
+Self-consistency is the standard equal-budget competitor of debate, so any claim that multi-agent structure helps must be made against it (see 8.6).
 
 ### 4.4 Router (`mas/router/`)
 - **Features** (`features.py`): seven observable features such as number of digits, operator and keyword counts, length, presence of parentheses. The ground-truth difficulty label is never used.
@@ -106,6 +117,7 @@ All architectures share one runtime (`mas/core.py`): the `Context` object record
 - **Training** (`train.py`): two modes. *Full-information* trains on a log where every architecture was run on every task. *Bandit* simulates partial feedback (only the chosen architecture's outcome is seen).
 - **Evaluation:** counterfactual replay on a held-out full-information log, with an oracle policy as an upper bound.
 - **Persistence:** `LinUCBRouter.save()` and `.load()` use JSON.
+- **Offline only:** the router is trained from logged outcomes and is **not** updated at inference time (Figure 1 labels the feedback arrow accordingly).
 
 ### 4.5 Fault injection (`mas/faults.py`, `mas/testbed.py`)
 
@@ -160,7 +172,7 @@ Start the service: `uvicorn api.main:app --reload`. Interactive docs are at `/do
 | Method and path | Purpose |
 |---|---|
 | `GET /health` | Status and whether a router is trained |
-| `GET /architectures` | Available architectures and fault kinds |
+| `GET /architectures` | Core architectures, baselines and fault kinds (`/solve` can force any of them) |
 | `POST /solve` | Run the orchestrator on one question |
 | `POST /router/train` | Train a router on synthetic tasks (`n_tasks`, `lam`, `seed`) |
 | `POST /router/save` | Save the trained router to `results/router.json` (fixed path) |
@@ -190,6 +202,7 @@ Note: with the mock backend, `question` must be an arithmetic expression. With a
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Provider keys, environment only |
 | `MODEL_NAME` | Model for the real backends (check current model names) |
 | `MOCK_HETERO` | `1` selects the heterogeneous mock scenario |
+| `MOCK_CORR` | Probability in [0, 1] that wrong answers are shared across samples (mock only) |
 | `RUN_LOG`, `RUN_LOG_ENABLED` | Run-log path and on/off switch |
 
 Never commit keys. `.env` is git-ignored; `.env.example` shows the format.
@@ -203,6 +216,8 @@ Never commit keys. `.env` is git-ignored; `.env.example` shows the format.
 | `experiments/main_results.py` | `results/main_results_<tag>.md` | Fixed architectures vs router vs oracle, unconstrained and with a hard budget |
 | `experiments/ablation.py` | `results/ablation.md` | Repair-loop ablation under injected faults |
 | `experiments/taxonomy.py` | `results/taxonomy.md`, `docs/fig_taxonomy.*` | Failure causes by architecture and fault |
+| `experiments/baselines.py` | `results/baselines.md` | Equal-budget comparison against self-consistency, adaptive SC and cascade in three environments |
+| `experiments/pareto.py` | `results/pareto.md`, `docs/fig_pareto.*` | Accuracy-vs-cost frontier and hard-budget sweep |
 | `docs/make_figure.py` | `docs/fig_architecture.*` | Regenerates Figure 1 |
 
 ```bash
@@ -212,6 +227,8 @@ python experiments/main_results.py --tag homogeneous
 MOCK_HETERO=1 python experiments/main_results.py --tag heterogeneous
 python experiments/ablation.py
 python experiments/taxonomy.py
+python experiments/baselines.py      # about 5 s
+python experiments/pareto.py         # about 20 s
 ```
 
 All runs use fixed seeds. To use a real model, set `LLM_BACKEND` and the key, **start with a small run** (for example `--n-train 30 --n-test 30`), and set a spending limit with your provider; debate makes many calls per task.
@@ -274,18 +291,43 @@ Caveats: the `oracle` trigger is best-of-n with a perfect verifier (an upper bou
 
 In clean debate, 18 of the 21 failure points are `vote_lost_correct`: a correct answer existed among the debaters and the majority vote discarded it. This motivated `debate_judge`. `unanimous_wrong` is zero only because the mock draws errors independently.
 
+### 8.6 Equal-budget baselines (the most important caveat for the multi-agent claim)
+
+Three environments were fixed **before** running this experiment: (1) homogeneous gains with independent errors, (2) heterogeneous gains with independent errors, (3) heterogeneous gains with correlated errors (`MOCK_CORR=0.5`). 3 seeds × 200 test tasks; cluster-bootstrap CIs; full tables in `results/baselines.md`.
+
+| Comparison (paired difference [95% CI]) | (1) homog., independent | (2) heterog., independent | (3) heterog., correlated |
+|---|---|---|---|
+| accuracy: `debate` − `sc7` (same ~255 tokens) | **−0.082 [−0.113, −0.050]** | +0.022 [−0.015, 0.057], n.s. | **+0.102 [0.063, 0.142]** |
+| accuracy: `debate_judge` − `sc7` | −0.035 [−0.062, −0.008] | +0.053 [0.022, 0.085] | +0.125 [0.087, 0.165] |
+| accuracy: `adaptive_sc` − `debate` | +0.052 [0.017, 0.085] (at 120 vs 255 tokens) | −0.043 [−0.080, −0.007] | −0.155 [−0.198, −0.113] |
+| reward: router over core pool − best fixed method | −0.085 [−0.117, −0.056] vs `adaptive_sc` | −0.002 [−0.039, 0.034], n.s. | +0.036 [0.025, 0.048] vs `debate_judge` |
+| reward: router over all methods − best fixed method | 0.000 (picks `adaptive_sc`) | +0.023 [0.005, 0.043] | +0.062 [0.042, 0.081] |
+
+What this shows:
+1. **"Debate beats equal-budget self-consistency" is not robust; it reverses with the error model.** With independent errors, plain majority voting over samples is strong and debate loses or ties; with correlated errors, voting collapses and debate wins by about 10 points. Whether real model errors are correlated is therefore the empirical question that decides which family wins.
+2. **A router over a pool that contains the right competitor is best or tied in all three environments** (`router (all)`). A router restricted to the core pool is not robust: in environment 1 it loses by 0.085 reward because the pool lacked `adaptive_sc`. Pool design matters as much as the routing rule.
+3. **`cascade` is never on the Pareto frontier**; `adaptive_sc` is on it in environments 1 and 2 and is the cheapest strong method when errors are independent.
+4. The router was trained and tested **inside the same environment**, so robustness to a shift in the error model (train on one, deploy on another) is untested.
+
+### 8.7 Accuracy-cost frontier and hard-budget sweep
+
+![Figure 2](fig_pareto.png)
+
+Row (a): accuracy versus mean tokens with the Pareto frontier. Row (b): accuracy when a hard budget B is enforced (6 budgets, 60 to 500 tokens; numbers in `results/pareto.md`). With B = 60 every method falls back to the first call's answer, so all equal `single`. Small non-monotone wiggles (for example `debate_judge` at B = 300 vs 500) come from the best-answer-so-far fallback when a run is truncated and should not be over-interpreted.
+
 ---
 
 ## 9. Limitations and threats to validity
 
 1. **Simulated solver.** All numbers come from a mock whose accuracy structure the author designed (two environments are reported for this reason). Conclusions about real models require runs with a real backend on GSM8K, HumanEval or HotpotQA. Only numeric-answer tasks are implemented.
-2. **Independent errors.** The mock draws errors independently. Real models have correlated errors, which weakens voting, verification and judging.
+2. **Error correlation is a free parameter.** The default mock draws errors independently; `MOCK_CORR` adds correlation but its value (0.5) is an assumption. Section 8.6 shows the multi-agent-vs-self-consistency conclusion flips with it, so the real correlation must be measured (roadmap item 2).
 3. **Fault binding.** Faults are tied to agent names, so a topology switch gives fresh agents by construction. Shared-role failures that follow the agent across topologies are not tested.
 4. **Same-model verifier and judge.** They share the solver's blind spots.
 5. **Token counts** for the mock are estimates.
 6. **Oracle numbers** are upper bounds only.
 7. **Small scale.** Three seeds and 100 to 200 tasks per cell; a bug in the intermittent-fault generator was found and fixed during the study, which is a reminder that the testbed itself needs scrutiny.
-8. The citations in `docs/report.md` were written from memory and must be verified before any submission.
+8. **Router transfer is untested:** it is evaluated in the environment it was trained in.
+9. The citations in `docs/report.md` were written from memory and must be verified before any submission.
 
 ---
 
@@ -305,24 +347,27 @@ mas/
   taxonomy.py               failure classification
   runlog.py, stats.py       run log, bootstrap statistics
   benchmarks/tasks.py       tasks, generator, GSM8K loader
-experiments/                main results, ablation, taxonomy
+experiments/                main results, ablation, taxonomy, baselines, Pareto (common.py = shared helpers)
 docs/                       this file, report draft, figures
 results/                    generated result tables
-tests/                      45 tests
+tests/                      50 tests
 ```
 
 ---
 
 ## 11. Testing
 
-`python -m pytest -q` runs 45 tests covering the LLM and budget layer, tasks, architectures, faults (including a regression test for intermittent faults), attribution, router training and persistence, orchestration, taxonomy, statistics and the API. The tests use the mock backend, so they are free and offline. The real-backend code paths (Anthropic, OpenAI) are exercised only through a fake client and have not been run against live APIs.
+`python -m pytest -q` runs 50 tests covering the LLM and budget layer, tasks, architectures, faults (including a regression test for intermittent faults), attribution, router training and persistence, orchestration, taxonomy, statistics and the API. The tests use the mock backend, so they are free and offline. The real-backend code paths (Anthropic, OpenAI) are exercised only through a fake client and have not been run against live APIs.
 
 ---
 
 ## 12. Roadmap
 
-1. Run the main experiments with a real model on GSM8K, HumanEval and HotpotQA, and update Section 8 with real data.
-2. Replace the same-model verifier with a different or cheaper one and measure false-alarm cost.
-3. Test shared-role failures that follow an agent across topologies.
-4. Improve partial-feedback router training (more exploration, more data).
-5. Add an accuracy-versus-cost frontier figure.
+Done in the latest iteration: cluster bootstrap, figure/code consistency, self-consistency, adaptive-SC and cascade baselines, three-environment sensitivity, accuracy-cost frontier and budget sweep.
+
+1. Run the main experiments with a real model on GSM8K, HumanEval and HotpotQA, and update Section 8 with real data (add response caching, retries and resume first so a crash does not waste API spend).
+2. **Measure real error correlation** (how often several samples of one model give the same wrong answer). This single number predicts whether debate or self-consistency should win (Section 8.6).
+3. Evaluate router transfer: train under one error model, deploy under another.
+4. Replace the same-model verifier with a different or cheaper one and measure false-alarm cost.
+5. Test shared-role failures and multi-fault scenarios; evaluate the LLM attributor on real traces against hand labels.
+6. Improve partial-feedback router training and add model-level routing (small versus large model).
